@@ -4,7 +4,8 @@ mod xml_types;
 
 pub use reader::HwpxReader;
 pub use writer::{
-    HeaderFooterApplyTo, HwpxFooter, HwpxHeader, HwpxHyperlink, HwpxImage, HwpxImageFormat,
-    HwpxTable, HwpxTextStyle, HwpxWriter, PageNumberFormat, StyledText,
+    CellSpan, HeaderFooterApplyTo, HwpxFooter, HwpxHeader, HwpxHyperlink, HwpxImage,
+    HwpxImageFormat, HwpxMetadata, HwpxTable, HwpxTextStyle, HwpxWriter, PageNumberFormat,
+    StyledText,
 };
 pub use xml_types::*;

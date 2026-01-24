@@ -32,6 +32,14 @@ const HWPX_NAMESPACES: &str = concat!(
     r#"xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0""#
 );
 
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 /// Text style configuration for HWPX paragraphs
 #[derive(Debug, Clone, Default)]
 pub struct HwpxTextStyle {
@@ -193,11 +201,12 @@ impl HwpxImageFormat {
 impl HwpxImage {
     pub fn from_bytes(data: Vec<u8>) -> Option<Self> {
         let format = HwpxImageFormat::from_bytes(&data)?;
+        let (width_mm, height_mm) = Self::read_dimensions_mm(&data, format);
         Some(Self {
             data,
             format,
-            width_mm: None,
-            height_mm: None,
+            width_mm,
+            height_mm,
         })
     }
 
@@ -206,12 +215,110 @@ impl HwpxImage {
         self.height_mm = Some(height_mm);
         self
     }
+
+    /// 이미지 바이트에서 픽셀 크기를 읽고 mm로 변환 (96 DPI 기준)
+    fn read_dimensions_mm(data: &[u8], format: HwpxImageFormat) -> (Option<u32>, Option<u32>) {
+        let (w_px, h_px) = match format {
+            HwpxImageFormat::Png => Self::read_png_dimensions(data),
+            HwpxImageFormat::Jpeg => Self::read_jpeg_dimensions(data),
+            HwpxImageFormat::Gif => Self::read_gif_dimensions(data),
+            HwpxImageFormat::Bmp => Self::read_bmp_dimensions(data),
+        };
+        match (w_px, h_px) {
+            (Some(w), Some(h)) if w > 0 && h > 0 => {
+                // 96 DPI 기준으로 mm 변환
+                let w_mm = (w as f64 * 25.4 / 96.0).round() as u32;
+                let h_mm = (h as f64 * 25.4 / 96.0).round() as u32;
+                (Some(w_mm.max(1)), Some(h_mm.max(1)))
+            }
+            _ => (None, None),
+        }
+    }
+
+    fn read_png_dimensions(data: &[u8]) -> (Option<u32>, Option<u32>) {
+        // PNG: 8-byte sig + 4-byte chunk_len + 4-byte "IHDR" + 4-byte width + 4-byte height
+        if data.len() < 24 {
+            return (None, None);
+        }
+        let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
+        let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
+        (Some(w), Some(h))
+    }
+
+    fn read_jpeg_dimensions(data: &[u8]) -> (Option<u32>, Option<u32>) {
+        // JPEG: SOF0(0xFFC0) 또는 SOF2(0xFFC2) 마커 찾기
+        let mut i = 2;
+        while i + 1 < data.len() {
+            if data[i] != 0xFF {
+                i += 1;
+                continue;
+            }
+            let marker = data[i + 1];
+            if marker == 0xC0 || marker == 0xC2 {
+                if i + 9 < data.len() {
+                    let h = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
+                    let w = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
+                    return (Some(w), Some(h));
+                }
+                return (None, None);
+            }
+            if i + 3 < data.len() {
+                let seg_len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
+                i += 2 + seg_len;
+            } else {
+                break;
+            }
+        }
+        (None, None)
+    }
+
+    fn read_gif_dimensions(data: &[u8]) -> (Option<u32>, Option<u32>) {
+        // GIF: 6-byte sig + 2-byte width(LE) + 2-byte height(LE)
+        if data.len() < 10 {
+            return (None, None);
+        }
+        let w = u16::from_le_bytes([data[6], data[7]]) as u32;
+        let h = u16::from_le_bytes([data[8], data[9]]) as u32;
+        (Some(w), Some(h))
+    }
+
+    fn read_bmp_dimensions(data: &[u8]) -> (Option<u32>, Option<u32>) {
+        // BMP: 18-byte offset에 width(LE i32), 22-byte offset에 height(LE i32)
+        if data.len() < 26 {
+            return (None, None);
+        }
+        let w = i32::from_le_bytes([data[18], data[19], data[20], data[21]]).unsigned_abs();
+        let h = i32::from_le_bytes([data[22], data[23], data[24], data[25]]).unsigned_abs();
+        (Some(w), Some(h))
+    }
 }
 
-#[derive(Debug, Clone, Default)]
+/// Cell span information for merged cells
+#[derive(Debug, Clone, Copy)]
+pub struct CellSpan {
+    pub col_span: u32,
+    pub row_span: u32,
+}
+
+impl Default for CellSpan {
+    fn default() -> Self {
+        Self {
+            col_span: 1,
+            row_span: 1,
+        }
+    }
+}
+
 pub struct HwpxTable {
+    /// Grid of cell text values indexed by logical (row, col) position.
+    /// Only cells that are the "origin" of a merge have text;
+    /// covered cells have empty strings and are skipped in output.
     pub rows: Vec<Vec<String>>,
     pub col_widths: Vec<u32>,
+    /// Cell span info: key = (row, col) of the origin cell
+    pub cell_spans: std::collections::HashMap<(usize, usize), CellSpan>,
+    /// Tracks which cells are covered by another cell's span
+    covered: std::collections::HashSet<(usize, usize)>,
 }
 
 impl HwpxTable {
@@ -219,6 +326,8 @@ impl HwpxTable {
         Self {
             rows: vec![vec![String::new(); cols]; rows],
             col_widths: vec![8390; cols],
+            cell_spans: std::collections::HashMap::new(),
+            covered: std::collections::HashSet::new(),
         }
     }
 
@@ -231,6 +340,8 @@ impl HwpxTable {
         Self {
             rows,
             col_widths: vec![8390; cols],
+            cell_spans: std::collections::HashMap::new(),
+            covered: std::collections::HashSet::new(),
         }
     }
 
@@ -238,6 +349,38 @@ impl HwpxTable {
         if row < self.rows.len() && col < self.rows[row].len() {
             self.rows[row][col] = value.to_string();
         }
+    }
+
+    /// Set cell merge span and mark covered cells
+    pub fn set_cell_span(&mut self, row: usize, col: usize, col_span: u32, row_span: u32) {
+        if col_span <= 1 && row_span <= 1 {
+            return;
+        }
+        self.cell_spans.insert(
+            (row, col),
+            CellSpan { col_span, row_span },
+        );
+        // Mark all cells covered by this span (except the origin)
+        for r in row..row + row_span as usize {
+            for c in col..col + col_span as usize {
+                if r != row || c != col {
+                    self.covered.insert((r, c));
+                }
+            }
+        }
+    }
+
+    /// Check if a cell position is covered by another cell's span
+    pub fn is_covered(&self, row: usize, col: usize) -> bool {
+        self.covered.contains(&(row, col))
+    }
+
+    /// Get the span for a cell (defaults to 1x1)
+    pub fn get_cell_span(&self, row: usize, col: usize) -> CellSpan {
+        self.cell_spans
+            .get(&(row, col))
+            .copied()
+            .unwrap_or_default()
     }
 }
 
@@ -365,6 +508,14 @@ pub enum HeaderFooterApplyTo {
     Even,
 }
 
+/// Document metadata for HWPX content.hpf
+#[derive(Debug, Clone, Default)]
+pub struct HwpxMetadata {
+    pub title: String,
+    pub creator: String,
+    pub created_date: String,
+}
+
 pub struct HwpxWriter {
     document: HwpDocument,
     tables: Vec<(usize, HwpxTable)>,
@@ -374,6 +525,7 @@ pub struct HwpxWriter {
     footers: Vec<HwpxFooter>,
     next_table_id: u32,
     next_image_id: u32,
+    metadata: HwpxMetadata,
 }
 
 impl HwpxWriter {
@@ -394,7 +546,12 @@ impl HwpxWriter {
             footers: Vec::new(),
             next_table_id: 1,
             next_image_id: 1,
+            metadata: HwpxMetadata::default(),
         }
+    }
+
+    pub fn set_metadata(&mut self, metadata: HwpxMetadata) {
+        self.metadata = metadata;
     }
 
     pub fn from_document(document: HwpDocument) -> Self {
@@ -407,6 +564,7 @@ impl HwpxWriter {
             footers: Vec::new(),
             next_table_id: 1,
             next_image_id: 1,
+            metadata: HwpxMetadata::default(),
         }
     }
 
@@ -805,24 +963,45 @@ impl HwpxWriter {
             ));
         }
 
+        let mut images_manifest = String::new();
+        for (idx, (_, image)) in self.images.iter().enumerate() {
+            let item_id = format!("image{}", idx + 1);
+            let href = format!("BinData/image{}.{}", idx + 1, image.format.extension());
+            let media_type = match image.format {
+                HwpxImageFormat::Png => "image/png",
+                HwpxImageFormat::Jpeg => "image/jpg",
+                HwpxImageFormat::Gif => "image/gif",
+                HwpxImageFormat::Bmp => "image/bmp",
+            };
+            images_manifest.push_str(&format!(
+                r#"<opf:item id="{}" href="{}" media-type="{}" isEmbeded="1"/>"#,
+                item_id, href, media_type
+            ));
+        }
+
+        let title = xml_escape(&self.metadata.title);
+        let creator = xml_escape(&self.metadata.creator);
+        let created_date = xml_escape(&self.metadata.created_date);
+
         format!(
             concat!(
                 r#"<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>"#,
                 r#"<opf:package {} version="" unique-identifier="" id="">"#,
                 r#"<opf:metadata>"#,
-                r#"<opf:title></opf:title>"#,
+                r#"<opf:title>{}</opf:title>"#,
                 r#"<opf:language>ko</opf:language>"#,
-                r#"<opf:meta name="creator" content="text"/>"#,
+                r#"<opf:meta name="creator" content="text">{}</opf:meta>"#,
                 r#"<opf:meta name="subject" content="text"/>"#,
                 r#"<opf:meta name="description" content="text"/>"#,
-                r#"<opf:meta name="lastsaveby" content="text"></opf:meta>"#,
-                r#"<opf:meta name="CreatedDate" content="text"></opf:meta>"#,
-                r#"<opf:meta name="ModifiedDate" content="text"></opf:meta>"#,
-                r#"<opf:meta name="date" content="text"></opf:meta>"#,
+                r#"<opf:meta name="lastsaveby" content="text">{}</opf:meta>"#,
+                r#"<opf:meta name="CreatedDate" content="text">{}</opf:meta>"#,
+                r#"<opf:meta name="ModifiedDate" content="text">{}</opf:meta>"#,
+                r#"<opf:meta name="date" content="text">{}</opf:meta>"#,
                 r#"<opf:meta name="keyword" content="text"/>"#,
                 r#"</opf:metadata>"#,
                 r#"<opf:manifest>"#,
                 r#"<opf:item id="header" href="Contents/header.xml" media-type="application/xml"/>"#,
+                r#"{}"#,
                 r#"{}"#,
                 r#"<opf:item id="headersc" href="Scripts/headerScripts" media-type="application/x-javascript ;charset=utf-16"/>"#,
                 r#"<opf:item id="sourcesc" href="Scripts/sourceScripts" media-type="application/x-javascript ;charset=utf-16"/>"#,
@@ -835,7 +1014,16 @@ impl HwpxWriter {
                 r#"<opf:itemref idref="sourcesc" linear="yes"/>"#,
                 r#"</opf:spine></opf:package>"#
             ),
-            HWPX_NAMESPACES, sections_manifest, sections_spine
+            HWPX_NAMESPACES,
+            title,          // opf:title
+            creator,        // creator
+            creator,        // lastsaveby
+            created_date,   // CreatedDate
+            created_date,   // ModifiedDate
+            created_date,   // date
+            sections_manifest,
+            images_manifest,
+            sections_spine
         )
     }
 
@@ -861,7 +1049,7 @@ impl HwpxWriter {
         xml.push_str(r#"<hh:fontface lang="USER" fontCnt="1"><hh:font id="0" face="맑은 고딕" type="TTF" isEmbedded="0"><hh:typeInfo familyType="FCAT_UNKNOWN" weight="0" proportion="0" contrast="0" strokeVariation="0" armStyle="0" letterform="0" midline="252" xHeight="255"/></hh:font></hh:fontface>"#);
         xml.push_str("</hh:fontfaces>");
 
-        xml.push_str(r#"<hh:borderFills itemCnt="2">"#);
+        xml.push_str(r#"<hh:borderFills itemCnt="3">"#);
         xml.push_str(r#"<hh:borderFill id="1" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">"#);
         xml.push_str(r#"<hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>"#);
         xml.push_str("<hh:leftBorder type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/><hh:rightBorder type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/>");
@@ -875,6 +1063,12 @@ impl HwpxWriter {
         xml.push_str("<hh:topBorder type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/><hh:bottomBorder type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/>");
         xml.push_str("<hh:diagonal type=\"SOLID\" width=\"0.1 mm\" color=\"#000000\"/>");
         xml.push_str("<hc:fillBrush><hc:winBrush faceColor=\"none\" hatchColor=\"#999999\" alpha=\"0\"/></hc:fillBrush></hh:borderFill>");
+        // id="3": 테이블 셀용 (실선 테두리)
+        xml.push_str(r#"<hh:borderFill id="3" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">"#);
+        xml.push_str(r#"<hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>"#);
+        xml.push_str("<hh:leftBorder type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/><hh:rightBorder type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/>");
+        xml.push_str("<hh:topBorder type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/><hh:bottomBorder type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/>");
+        xml.push_str("<hh:diagonal type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/></hh:borderFill>");
         xml.push_str("</hh:borderFills>");
 
         xml.push_str(&self.generate_char_properties());
@@ -945,7 +1139,7 @@ impl HwpxWriter {
 
         let mut xml = format!(r#"<hh:binDataItems itemCnt="{}">"#, self.images.len());
         for (idx, (_, image)) in self.images.iter().enumerate() {
-            let item_id = format!("IMG{}", idx + 1);
+            let item_id = format!("image{}", idx + 1);
             let src = format!("BinData/image{}.{}", idx + 1, image.format.extension());
             let format = image.format.extension().to_uppercase();
             xml.push_str(&format!(
@@ -1214,11 +1408,15 @@ impl HwpxWriter {
                         ));
                     }
                 } else if let Some(table) = self.get_table_for_paragraph(idx) {
+                    xml.push_str(r#"<hp:run charPrIDRef="0">"#);
                     xml.push_str(&self.format_table(table));
                     xml.push_str("<hp:t/>");
+                    xml.push_str("</hp:run>");
                 } else if let Some((img_idx, image)) = self.get_image_for_paragraph(idx) {
+                    xml.push_str(r#"<hp:run charPrIDRef="0">"#);
                     xml.push_str(&self.format_picture(img_idx, image));
                     xml.push_str("<hp:t/>");
+                    xml.push_str("</hp:run>");
                 } else if let Some(links) = self.get_hyperlinks_for_paragraph(idx) {
                     xml.push_str(&self.format_hyperlinks(text, links));
                 } else {
@@ -1309,28 +1507,112 @@ impl HwpxWriter {
     }
 
     fn format_picture(&self, img_idx: usize, image: &HwpxImage) -> String {
-        let hwp_scale = 7200.0 / 25.4;
-        let width = (image.width_mm.unwrap_or(50) as f32 * hwp_scale) as u32;
-        let height = (image.height_mm.unwrap_or(50) as f32 * hwp_scale) as u32;
-        let item_id = format!("IMG{}", img_idx + 1);
+        let hwp_scale: f64 = 7200.0 / 25.4;
+        let content_width: u32 = 42520;
 
-        format!(
+        let org_width = (image.width_mm.unwrap_or(50) as f64 * hwp_scale) as u32;
+        let org_height = (image.height_mm.unwrap_or(50) as f64 * hwp_scale) as u32;
+
+        // 본문 너비에 맞게 스케일링
+        let (cur_width, cur_height) = if org_width > content_width {
+            let scale = content_width as f64 / org_width as f64;
+            (content_width, (org_height as f64 * scale) as u32)
+        } else {
+            (org_width, org_height)
+        };
+
+        let item_id = format!("image{}", img_idx + 1);
+        let pic_id = self.next_image_id + img_idx as u32;
+        let center_x = cur_width / 2;
+        let center_y = cur_height / 2;
+
+        let mut xml = String::new();
+        xml.push_str(&format!(
             concat!(
-                r#"<hp:pic id="{}" zOrder="0" numberingType="PICTURE" textWrap="TOP_AND_BOTTOM" "#,
-                r#"textFlow="BOTH_SIDES" lock="0" dropcapstyle="None">"#,
-                r#"<hp:sz width="{}" widthRelTo="ABSOLUTE" height="{}" heightRelTo="ABSOLUTE" protect="0"/>"#,
-                r#"<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" "#,
-                r#"holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" "#,
-                r#"horzAlign="LEFT" vertOffset="0" horzOffset="0"/>"#,
-                r#"<hp:outMargin left="0" right="0" top="0" bottom="0"/>"#,
-                r#"<hp:img binaryItemIDRef="{}"/>"#,
-                r#"</hp:pic>"#
+                r#"<hp:pic id="{}" zOrder="{}" numberingType="PICTURE" textWrap="TOP_AND_BOTTOM" "#,
+                r#"textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" href="" groupLevel="0" "#,
+                r#"instid="{}" reverse="0">"#
             ),
-            self.next_image_id + img_idx as u32,
-            width,
-            height,
+            pic_id, img_idx, pic_id
+        ));
+
+        xml.push_str(r#"<hp:offset x="0" y="0"/>"#);
+        xml.push_str(&format!(
+            r#"<hp:orgSz width="{}" height="{}"/>"#,
+            org_width, org_height
+        ));
+        xml.push_str(&format!(
+            r#"<hp:curSz width="{}" height="{}"/>"#,
+            cur_width, cur_height
+        ));
+        xml.push_str(r#"<hp:flip horizontal="0" vertical="0"/>"#);
+        xml.push_str(&format!(
+            r#"<hp:rotationInfo angle="0" centerX="{}" centerY="{}" rotateimage="1"/>"#,
+            center_x, center_y
+        ));
+
+        // renderingInfo
+        let sca_x = if org_width > 0 {
+            cur_width as f64 / org_width as f64
+        } else {
+            1.0
+        };
+        let sca_y = if org_height > 0 {
+            cur_height as f64 / org_height as f64
+        } else {
+            1.0
+        };
+        xml.push_str("<hp:renderingInfo>");
+        xml.push_str(r#"<hc:transMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/>"#);
+        xml.push_str(&format!(
+            r#"<hc:scaMatrix e1="{:.6}" e2="0" e3="0" e4="0" e5="{:.6}" e6="0"/>"#,
+            sca_x, sca_y
+        ));
+        xml.push_str(r#"<hc:rotMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/>"#);
+        xml.push_str("</hp:renderingInfo>");
+
+        // hc:img (핵심: hp:img 아닌 hc:img 네임스페이스)
+        xml.push_str(&format!(
+            r#"<hc:img binaryItemIDRef="{}" bright="0" contrast="0" effect="REAL_PIC" alpha="0"/>"#,
             item_id
-        )
+        ));
+
+        // imgRect
+        xml.push_str("<hp:imgRect>");
+        xml.push_str(r#"<hc:pt0 x="0" y="0"/>"#);
+        xml.push_str(&format!(r#"<hc:pt1 x="{}" y="0"/>"#, org_width));
+        xml.push_str(&format!(
+            r#"<hc:pt2 x="{}" y="{}"/>"#,
+            org_width, org_height
+        ));
+        xml.push_str(&format!(r#"<hc:pt3 x="0" y="{}"/>"#, org_height));
+        xml.push_str("</hp:imgRect>");
+
+        xml.push_str(&format!(
+            r#"<hp:imgClip left="0" right="{}" top="0" bottom="{}"/>"#,
+            org_width, org_height
+        ));
+        xml.push_str(r#"<hp:inMargin left="0" right="0" top="0" bottom="0"/>"#);
+        xml.push_str(&format!(
+            r#"<hp:imgDim dimwidth="{}" dimheight="{}"/>"#,
+            org_width, org_height
+        ));
+        xml.push_str("<hp:effects/>");
+
+        // sz, pos, outMargin (참조 파일에서는 하단에 위치)
+        xml.push_str(&format!(
+            r#"<hp:sz width="{}" widthRelTo="ABSOLUTE" height="{}" heightRelTo="ABSOLUTE" protect="0"/>"#,
+            cur_width, cur_height
+        ));
+        xml.push_str(concat!(
+            r#"<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" "#,
+            r#"holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" "#,
+            r#"horzAlign="LEFT" vertOffset="0" horzOffset="0"/>"#
+        ));
+        xml.push_str(r#"<hp:outMargin left="0" right="0" top="0" bottom="0"/>"#);
+        xml.push_str("</hp:pic>");
+
+        xml
     }
 
     fn format_table(&self, table: &HwpxTable) -> String {
@@ -1340,38 +1622,50 @@ impl HwpxWriter {
             return String::new();
         }
 
-        let total_width: u32 = table.col_widths.iter().sum();
-        let cell_height = 284;
+        let content_width: u32 = 42520;
+        let col_width = content_width / col_cnt as u32;
+        let total_width = col_width * col_cnt as u32;
+        let cell_height: u32 = 1000;
 
         let mut xml = format!(
             concat!(
                 r#"<hp:tbl id="{}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" "#,
                 r#"textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" "#,
-                r#"repeatHeader="1" rowCnt="{}" colCnt="{}" cellSpacing="0" borderFillIDRef="2" noAdjust="0">"#,
-                r#"<hp:sz width="{}" widthRelTo="ABSOLUTE" height="0" heightRelTo="ABSOLUTE" protect="0"/>"#,
+                r#"repeatHeader="1" rowCnt="{}" colCnt="{}" cellSpacing="0" borderFillIDRef="3" noAdjust="0">"#,
+                r#"<hp:sz width="{}" widthRelTo="ABSOLUTE" height="{}" heightRelTo="ABSOLUTE" protect="0"/>"#,
                 r#"<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" "#,
-                r#"holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" "#,
+                r#"holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" "#,
                 r#"horzAlign="LEFT" vertOffset="0" horzOffset="0"/>"#,
                 r#"<hp:outMargin left="283" right="283" top="283" bottom="283"/>"#,
                 r#"<hp:inMargin left="510" right="510" top="142" bottom="142"/>"#
             ),
-            self.next_table_id, row_cnt, col_cnt, total_width
+            self.next_table_id, row_cnt, col_cnt, total_width,
+            cell_height * row_cnt as u32
         );
 
-        for (row_idx, row) in table.rows.iter().enumerate() {
+        for row_idx in 0..row_cnt {
             xml.push_str("<hp:tr>");
-            for (col_idx, cell_text) in row.iter().enumerate() {
-                let cell_width = table.col_widths.get(col_idx).copied().unwrap_or(8390);
+            for col_idx in 0..col_cnt {
+                // Skip cells covered by another cell's span
+                if table.is_covered(row_idx, col_idx) {
+                    continue;
+                }
+
+                let cell_text = &table.rows[row_idx][col_idx];
+                let span = table.get_cell_span(row_idx, col_idx);
+                let cell_w = col_width * span.col_span;
+                let cell_h = cell_height * span.row_span;
+
                 xml.push_str(&format!(
                     concat!(
-                        r#"<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="2">"#,
+                        r#"<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="3">"#,
                         r#"<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" "#,
                         r#"linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">"#,
                         r#"<hp:p id="0" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">"#,
                         r#"<hp:run charPrIDRef="0"><hp:t>{}</hp:t></hp:run>"#,
                         r#"</hp:p></hp:subList>"#,
                         r#"<hp:cellAddr colAddr="{}" rowAddr="{}"/>"#,
-                        r#"<hp:cellSpan colSpan="1" rowSpan="1"/>"#,
+                        r#"<hp:cellSpan colSpan="{}" rowSpan="{}"/>"#,
                         r#"<hp:cellSz width="{}" height="{}"/>"#,
                         r#"<hp:cellMargin left="510" right="510" top="142" bottom="142"/>"#,
                         r#"</hp:tc>"#
@@ -1379,8 +1673,10 @@ impl HwpxWriter {
                     escape_xml(cell_text),
                     col_idx,
                     row_idx,
-                    cell_width,
-                    cell_height
+                    span.col_span,
+                    span.row_span,
+                    cell_w,
+                    cell_h
                 ));
             }
             xml.push_str("</hp:tr>");

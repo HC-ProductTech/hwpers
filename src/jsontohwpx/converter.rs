@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::hwpx::{HwpxTextStyle, HwpxWriter, StyledText};
+use crate::hwpx::{HwpxMetadata, HwpxTextStyle, HwpxWriter, StyledText};
 
 use super::error::Result;
 use super::image;
@@ -15,6 +15,18 @@ pub fn convert(input: &ApiResponse, base_path: &Path) -> Result<Vec<u8>> {
     let mut writer = HwpxWriter::new();
     let article = &input.data.article;
 
+    // 문서 메타데이터 설정
+    let creator = match (&article.reg_emp_name, &article.reg_dept_name) {
+        (Some(name), Some(dept)) => format!("{} ({})", name, dept),
+        (Some(name), None) => name.clone(),
+        _ => String::new(),
+    };
+    writer.set_metadata(HwpxMetadata {
+        title: article.subject.clone(),
+        creator,
+        created_date: article.reg_dt.clone().unwrap_or_default(),
+    });
+
     // includeHeader 옵션 처리
     if input.options.include_header {
         add_header_section(&mut writer, input)?;
@@ -26,17 +38,17 @@ pub fn convert(input: &ApiResponse, base_path: &Path) -> Result<Vec<u8>> {
     }
 
     // contents 순회하며 변환
-    let mut prev_was_text = false;
+    let mut has_prev = false;
 
     for content in &article.contents {
+        // 각 콘텐츠 항목 사이에 빈 단락(개행) 추가
+        if has_prev {
+            text::add_separator_paragraph(&mut writer)?;
+        }
+
         match content {
             Content::Text { value } => {
-                // 연속된 text 요소 사이 빈 단락 추가
-                if prev_was_text {
-                    text::add_separator_paragraph(&mut writer)?;
-                }
                 text::add_text_paragraphs(&mut writer, value)?;
-                prev_was_text = true;
             }
             Content::Image {
                 url,
@@ -48,13 +60,12 @@ pub fn convert(input: &ApiResponse, base_path: &Path) -> Result<Vec<u8>> {
                 } else if let Some(url_str) = url {
                     image::add_image_from_url(&mut writer, url_str, base_path)?;
                 }
-                prev_was_text = false;
             }
             Content::Table { value } => {
                 table::add_table_from_html(&mut writer, value)?;
-                prev_was_text = false;
             }
         }
+        has_prev = true;
     }
 
     let bytes = writer.to_bytes()?;

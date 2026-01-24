@@ -1,0 +1,19 @@
+{
+  "responseCode": "0",
+  "responseText": "SUCCESS",
+  "data": {
+    "article": {
+      "atclId": "BA000000000000000000101",
+      "subject": "[테스트] colspan만 있는 테이블",
+      "contents": [
+        {
+          "type": "table",
+          "value": "<table><tr><th colspan=\"4\">분기별 매출 현황</th></tr><tr><th>분기</th><th>제품A</th><th>제품B</th><th>제품C</th></tr><tr><td>1분기</td><td>100</td><td>200</td><td>300</td></tr><tr><td>2분기</td><td>150</td><td>250</td><td>350</td></tr><tr><td colspan=\"2\">상반기 소계</td><td colspan=\"2\">합계: 1,350</td></tr></table>"
+        }
+      ],
+      "regDt": "2025-07-01 AM 09:00:00",
+      "regEmpName": "김테스트",
+      "regDeptName": "개발팀"
+    }
+  }
+}

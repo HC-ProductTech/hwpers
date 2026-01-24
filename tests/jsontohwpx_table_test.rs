@@ -36,11 +36,146 @@ fn test_with_table_example() {
 
 #[test]
 fn test_table_merge_example() {
-    // colspan/rowspan 포함 테이블: 병합은 무시하고 텍스트만 추출
     let doc = convert_example_file("table_merge.json");
     let text = doc.extract_text();
-    // 테이블 외 텍스트 확인
     assert!(text.contains("셀 병합이 포함된"), "본문 텍스트 포함");
+}
+
+#[test]
+fn test_table_merge1_colspan_only() {
+    // colspan만 있는 테이블 (4열)
+    let _doc = convert_example_file("table_merge1.json");
+}
+
+#[test]
+fn test_table_merge2_rowspan_only() {
+    // rowspan만 있는 테이블 (3열)
+    let _doc = convert_example_file("table_merge2.json");
+}
+
+#[test]
+fn test_table_merge3_colspan_rowspan_block() {
+    // colspan+rowspan 큰 블록 머지 (4열)
+    let _doc = convert_example_file("table_merge3.json");
+}
+
+#[test]
+fn test_table_merge4_complex_multi_merge() {
+    // 복잡한 다중 머지 (5열)
+    let _doc = convert_example_file("table_merge4.json");
+}
+
+#[test]
+fn test_table_merge5_irregular_pattern() {
+    // 불규칙 머지 패턴 (5열)
+    let _doc = convert_example_file("table_merge5.json");
+}
+
+#[test]
+fn test_table_merge_cell_structure() {
+    // 직접 HTML을 파싱하여 셀 구조 검증
+    let html = r#"<table>
+        <tr><th colspan="3">제목</th></tr>
+        <tr><td rowspan="2">그룹</td><td>A</td><td>1</td></tr>
+        <tr><td>B</td><td>2</td></tr>
+    </table>"#;
+
+    let json = format!(
+        r#"{{"responseCode":"0","data":{{"article":{{"atclId":"MERGE_STRUCT","subject":"구조검증","contents":[{{"type":"table","value":"{}"}}]}}}}}}"#,
+        html.replace('\n', "").replace('"', "\\\"").replace("    ", "")
+    );
+
+    let input: ApiResponse = serde_json::from_str(&json).unwrap();
+    let bytes = jsontohwpx::convert(&input, &base_path()).unwrap();
+    verify_hwpx_bytes(&bytes);
+
+    // ZIP에서 section0.xml 추출하여 구조 확인
+    let cursor = std::io::Cursor::new(&bytes);
+    let mut archive = zip::ZipArchive::new(cursor).unwrap();
+    let mut section_xml = String::new();
+    {
+        use std::io::Read;
+        let mut file = archive.by_name("Contents/section0.xml").unwrap();
+        file.read_to_string(&mut section_xml).unwrap();
+    }
+
+    // Row 0: colspan=3
+    assert!(section_xml.contains(r#"colAddr="0" rowAddr="0""#));
+    assert!(section_xml.contains(r#"colSpan="3" rowSpan="1""#));
+    // Row 1: "그룹" rowspan=2
+    assert!(section_xml.contains(r#"colAddr="0" rowAddr="1""#));
+    assert!(section_xml.contains(r#"colSpan="1" rowSpan="2""#));
+    // Row 2: col 0 is covered, starts at col 1
+    assert!(section_xml.contains(r#"colAddr="1" rowAddr="2""#));
+    // Covered cells should NOT have their own tc element at (0,2)
+    // "B" is at colAddr=1, "2" is at colAddr=2 in row 2
+    assert!(section_xml.contains(r#"colAddr="2" rowAddr="2""#));
+}
+
+#[test]
+fn test_table_merge_width_calculation() {
+    // 셀 너비가 올바르게 계산되는지 확인
+    let html = r#"<table>
+        <tr><td colspan="2">병합</td><td>단일</td></tr>
+        <tr><td>A</td><td>B</td><td>C</td></tr>
+    </table>"#;
+
+    let json = format!(
+        r#"{{"responseCode":"0","data":{{"article":{{"atclId":"MERGE_WIDTH","subject":"너비검증","contents":[{{"type":"table","value":"{}"}}]}}}}}}"#,
+        html.replace('\n', "").replace('"', "\\\"").replace("    ", "")
+    );
+
+    let input: ApiResponse = serde_json::from_str(&json).unwrap();
+    let bytes = jsontohwpx::convert(&input, &base_path()).unwrap();
+    verify_hwpx_bytes(&bytes);
+
+    let cursor = std::io::Cursor::new(&bytes);
+    let mut archive = zip::ZipArchive::new(cursor).unwrap();
+    let mut section_xml = String::new();
+    {
+        use std::io::Read;
+        let mut file = archive.by_name("Contents/section0.xml").unwrap();
+        file.read_to_string(&mut section_xml).unwrap();
+    }
+
+    // 3열 테이블: col_width = 42520/3 = 14173
+    // colspan=2 셀: width = 14173*2 = 28346
+    assert!(section_xml.contains(r#"width="28346""#), "colspan=2 셀 너비");
+    // 단일 셀: width = 14173
+    assert!(section_xml.contains(r#"width="14173""#), "단일 셀 너비");
+}
+
+#[test]
+fn test_table_merge_height_calculation() {
+    // rowspan 시 높이가 올바르게 계산되는지 확인
+    let html = r#"<table>
+        <tr><td rowspan="3">병합</td><td>A</td></tr>
+        <tr><td>B</td></tr>
+        <tr><td>C</td></tr>
+    </table>"#;
+
+    let json = format!(
+        r#"{{"responseCode":"0","data":{{"article":{{"atclId":"MERGE_HEIGHT","subject":"높이검증","contents":[{{"type":"table","value":"{}"}}]}}}}}}"#,
+        html.replace('\n', "").replace('"', "\\\"").replace("    ", "")
+    );
+
+    let input: ApiResponse = serde_json::from_str(&json).unwrap();
+    let bytes = jsontohwpx::convert(&input, &base_path()).unwrap();
+    verify_hwpx_bytes(&bytes);
+
+    let cursor = std::io::Cursor::new(&bytes);
+    let mut archive = zip::ZipArchive::new(cursor).unwrap();
+    let mut section_xml = String::new();
+    {
+        use std::io::Read;
+        let mut file = archive.by_name("Contents/section0.xml").unwrap();
+        file.read_to_string(&mut section_xml).unwrap();
+    }
+
+    // rowspan=3: height = 1000*3 = 3000
+    assert!(section_xml.contains(r#"height="3000""#), "rowspan=3 셀 높이");
+    // 일반 셀: height = 1000
+    assert!(section_xml.contains(r#"height="1000""#), "일반 셀 높이");
 }
 
 #[test]

@@ -202,6 +202,132 @@ cargo install hwpers
 hwp_info document.hwp
 ```
 
+## jsontohwpx CLI
+
+JSON API 응답을 HWPX(한글 문서) 파일로 변환하는 CLI 도구입니다.
+
+### 빌드
+
+```bash
+cargo build --release
+```
+
+빌드 결과물: `target/release/jsontohwpx`
+
+### 테스트
+
+```bash
+# 전체 테스트 실행
+cargo test
+
+# 테이블 관련 테스트만 실행
+cargo test --test jsontohwpx_table_test
+
+# CLI 테스트만 실행
+cargo test --test jsontohwpx_cli_test
+
+# Clippy 린트 검사
+cargo clippy -- -D warnings
+```
+
+### 사용법
+
+```bash
+jsontohwpx [OPTIONS] <INPUT>
+```
+
+### 인자
+
+| 인자 | 설명 |
+|------|------|
+| `<INPUT>` | 입력 JSON 파일 경로. `-`를 지정하면 stdin에서 읽습니다. |
+
+### 옵션
+
+| 옵션 | 단축 | 기본값 | 설명 |
+|------|------|--------|------|
+| `--output <PATH>` | `-o` | `{atclId}.hwpx` | 출력 HWPX 파일 경로 |
+| `--base-path <PATH>` | `-b` | `.` | 이미지 기본 경로 (상대 경로 이미지 해석용) |
+| `--include-header` | | `false` | 헤더(작성자, 부서, 일시) 포함 강제 |
+| `--validate` | | `false` | 검증만 수행 (파일 변환 없음) |
+| `--json` | | `false` | 에러를 JSON 형식으로 출력 |
+| `--help` | `-h` | | 도움말 출력 |
+
+### 실행 예시
+
+```bash
+# 기본 변환 (출력: {atclId}.hwpx)
+jsontohwpx input.json
+
+# 출력 경로 지정
+jsontohwpx input.json -o output.hwpx
+
+# stdin에서 읽기
+cat input.json | jsontohwpx -
+
+# 이미지 기본 경로 지정
+jsontohwpx input.json -b ./images -o output.hwpx
+
+# 헤더 포함하여 변환
+jsontohwpx input.json --include-header -o output.hwpx
+
+# JSON만 검증 (변환 없음)
+jsontohwpx input.json --validate
+
+# 에러를 JSON으로 출력 (CI 연동 시 유용)
+jsontohwpx input.json --json -o output.hwpx
+```
+
+### 입력 JSON 형식
+
+```json
+{
+  "responseCode": "0",
+  "data": {
+    "article": {
+      "atclId": "DOC001",
+      "subject": "문서 제목",
+      "contents": [
+        { "type": "text", "value": "본문 텍스트" },
+        { "type": "table", "value": "<table><tr><td>셀</td></tr></table>" },
+        { "type": "image", "value": "image.png" }
+      ],
+      "regDt": "2025-01-24 AM 10:00:00",
+      "regEmpName": "작성자",
+      "regDeptName": "부서명"
+    }
+  }
+}
+```
+
+#### 콘텐츠 타입
+
+| type | value | 설명 |
+|------|-------|------|
+| `text` | 텍스트 문자열 | 줄바꿈(`\n`) 지원 |
+| `table` | HTML 테이블 | `<table>` 태그, colspan/rowspan 지원 |
+| `image` | 파일 경로 또는 URL | PNG/JPEG/GIF/WebP/AVIF 지원 |
+
+### 종료 코드
+
+| 코드 | 의미 |
+|------|------|
+| 0 | 성공 |
+| 1 | 입력 오류 (파일 없음, JSON 파싱 실패) |
+| 2 | 변환 오류 (빈 테이블, 잘못된 데이터) |
+| 3 | I/O 오류 (파일 쓰기 실패) |
+
+### 진행 로그
+
+변환 과정은 stderr로 진행 상황을 출력합니다:
+
+```
+[1/3] JSON 파싱 중...
+[2/3] 변환 중... (3개 콘텐츠)
+[3/3] 파일 저장 중... output.hwpx
+변환 완료: output.hwpx
+```
+
 ## Format Support
 
 This library supports HWP 5.0 format files. For older HWP formats, consider using format conversion tools first.
