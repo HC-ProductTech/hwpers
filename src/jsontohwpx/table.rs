@@ -98,4 +98,84 @@ mod tests {
         let bytes = writer.to_bytes().unwrap();
         assert!(!bytes.is_empty());
     }
+
+    #[test]
+    fn test_colspan_fallback() {
+        // colspan은 무시하고 텍스트만 추출
+        let html = r#"<table><tr><th colspan="3">합계</th></tr><tr><td>A</td><td>B</td><td>C</td></tr></table>"#;
+        let table = parse_html_table(html).unwrap();
+        assert_eq!(table.rows.len(), 2);
+        // colspan=3인 셀은 1개 셀로 추출, 나머지는 빈 문자열로 패딩
+        assert_eq!(table.rows[0][0], "합계");
+        assert_eq!(table.rows[0].len(), 3); // 패딩됨
+    }
+
+    #[test]
+    fn test_rowspan_fallback() {
+        // rowspan은 무시, 각 행에서 보이는 셀만 추출
+        let html =
+            r#"<table><tr><td rowspan="2">병합</td><td>A</td></tr><tr><td>B</td></tr></table>"#;
+        let table = parse_html_table(html).unwrap();
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0][0], "병합");
+        assert_eq!(table.rows[0][1], "A");
+        // 두 번째 행에는 "B"만 있고 패딩됨
+        assert_eq!(table.rows[1][0], "B");
+    }
+
+    #[test]
+    fn test_inline_style_ignored() {
+        // 인라인 스타일은 무시하고 텍스트만 추출
+        let html = r#"<table><tr><td style="color:red; font-weight:bold;">스타일</td><td class="highlight">클래스</td></tr></table>"#;
+        let table = parse_html_table(html).unwrap();
+        assert_eq!(table.rows[0][0], "스타일");
+        assert_eq!(table.rows[0][1], "클래스");
+    }
+
+    #[test]
+    fn test_th_treated_as_text() {
+        // th는 td와 동일하게 텍스트만 추출 (HwpxTable이 셀별 스타일 미지원)
+        let html = "<table><tr><th>헤더</th></tr><tr><td>데이터</td></tr></table>";
+        let table = parse_html_table(html).unwrap();
+        assert_eq!(table.rows[0][0], "헤더");
+        assert_eq!(table.rows[1][0], "데이터");
+    }
+
+    #[test]
+    fn test_whitespace_trimming() {
+        let html = "<table><tr><td>  공백  </td><td>\n줄바꿈\n</td></tr></table>";
+        let table = parse_html_table(html).unwrap();
+        assert_eq!(table.rows[0][0], "공백");
+        assert_eq!(table.rows[0][1], "줄바꿈");
+    }
+
+    #[test]
+    fn test_nested_html_elements_text_only() {
+        // 셀 내부 HTML 태그는 무시하고 텍스트만 추출
+        let html = "<table><tr><td><b>굵게</b> 일반</td><td><a href='#'>링크</a></td></tr></table>";
+        let table = parse_html_table(html).unwrap();
+        assert_eq!(table.rows[0][0], "굵게 일반");
+        assert_eq!(table.rows[0][1], "링크");
+    }
+
+    #[test]
+    fn test_empty_cells() {
+        let html = "<table><tr><td></td><td>값</td></tr><tr><td>A</td><td></td></tr></table>";
+        let table = parse_html_table(html).unwrap();
+        assert_eq!(table.rows[0][0], "");
+        assert_eq!(table.rows[0][1], "값");
+        assert_eq!(table.rows[1][0], "A");
+        assert_eq!(table.rows[1][1], "");
+    }
+
+    #[test]
+    fn test_table_with_hwpx_reader_verification() {
+        let mut writer = HwpxWriter::new();
+        let html = "<table><thead><tr><th>이름</th><th>나이</th></tr></thead><tbody><tr><td>홍길동</td><td>30</td></tr></tbody></table>";
+        add_table_from_html(&mut writer, html).unwrap();
+
+        let bytes = writer.to_bytes().unwrap();
+        // HwpxReader가 생성된 HWPX를 정상적으로 읽을 수 있는지 확인
+        let _doc = crate::HwpxReader::from_bytes(&bytes).unwrap();
+    }
 }
