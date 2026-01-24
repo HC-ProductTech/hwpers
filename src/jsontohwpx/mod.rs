@@ -1,3 +1,4 @@
+pub mod api;
 pub mod converter;
 pub mod error;
 pub mod image;

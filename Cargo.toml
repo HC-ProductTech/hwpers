@@ -37,14 +37,29 @@ scraper = "0.21"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp", "avif"] }
 reqwest = { version = "0.12", features = ["blocking"] }
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "limit"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "8", features = ["axum"] }
 
 [[bin]]
 name = "jsontohwpx"
 path = "src/bin/jsontohwpx.rs"
 
+[[bin]]
+name = "jsontohwpx-api"
+path = "src/bin/jsontohwpx_api.rs"
+
 [dev-dependencies]
 pretty_assertions = "1.4"
 tempfile = "3.8"
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
 
 [features]
 default = []
