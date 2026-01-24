@@ -1,5 +1,6 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use axum::Router;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
@@ -11,7 +12,39 @@ fn test_config() -> ServerConfig {
         port: 0,
         max_request_size: 50 * 1024 * 1024,
         base_path: std::path::PathBuf::from("examples/jsontohwpx"),
+        ..Default::default()
     }
+}
+
+fn test_config_with_output(output_dir: std::path::PathBuf) -> ServerConfig {
+    ServerConfig {
+        host: "127.0.0.1".to_string(),
+        port: 0,
+        max_request_size: 50 * 1024 * 1024,
+        base_path: std::path::PathBuf::from("examples/jsontohwpx"),
+        output_dir,
+        ..Default::default()
+    }
+}
+
+/// 비동기 변환 후 상태가 completed가 될 때까지 폴링
+async fn poll_job_completed(app: &Router, job_id: &str) -> serde_json::Value {
+    for _ in 0..50 {
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        let req = Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/jobs/{}", job_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let status = json["status"].as_str().unwrap_or("");
+        if status == "completed" || status == "failed" {
+            return json;
+        }
+    }
+    panic!("작업이 시간 내에 완료되지 않음");
 }
 
 fn simple_json() -> &'static str {
@@ -391,4 +424,244 @@ async fn test_convert_with_include_header() {
 
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     assert_eq!(&body[0..2], &[0x50, 0x4B]);
+}
+
+// --- 비동기 변환 API 테스트 ---
+
+#[tokio::test]
+async fn test_convert_async_success() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = create_router(&test_config_with_output(tmp.path().to_path_buf()));
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/async")
+        .header("content-type", "application/json")
+        .body(Body::from(simple_json()))
+        .unwrap();
+
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::ACCEPTED);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "queued");
+    assert!(json["jobId"].as_str().is_some());
+    assert!(json["createdAt"].as_str().is_some());
+
+    let job_id = json["jobId"].as_str().unwrap();
+
+    // 작업 완료 대기
+    let result = poll_job_completed(&app, job_id).await;
+    assert_eq!(result["status"], "completed");
+    assert!(result["downloadUrl"].as_str().is_some());
+}
+
+#[tokio::test]
+async fn test_convert_async_invalid_json() {
+    let app = create_router(&test_config());
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/async")
+        .header("content-type", "application/json")
+        .body(Body::from("not json"))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["code"], "INVALID_JSON");
+}
+
+#[tokio::test]
+async fn test_convert_async_invalid_response_code() {
+    let app = create_router(&test_config());
+
+    let json_body = r#"{
+        "responseCode": "99",
+        "data": {
+            "article": {
+                "atclId": "ERR001",
+                "subject": "에러",
+                "contents": []
+            }
+        }
+    }"#;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/async")
+        .header("content-type", "application/json")
+        .body(Body::from(json_body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_get_job_not_found() {
+    let app = create_router(&test_config());
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/jobs/nonexistent-id")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["code"], "NOT_FOUND");
+}
+
+#[tokio::test]
+async fn test_download_job_not_found() {
+    let app = create_router(&test_config());
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/jobs/nonexistent-id/download")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_convert_async_download() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = create_router(&test_config_with_output(tmp.path().to_path_buf()));
+
+    // 비동기 변환 요청
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/async")
+        .header("content-type", "application/json")
+        .body(Body::from(simple_json()))
+        .unwrap();
+
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["jobId"].as_str().unwrap().to_string();
+
+    // 완료 대기
+    let result = poll_job_completed(&app, &job_id).await;
+    assert_eq!(result["status"], "completed");
+
+    // 다운로드
+    let download_url = result["downloadUrl"].as_str().unwrap();
+    let req = Request::builder()
+        .method("GET")
+        .uri(download_url)
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    assert_eq!(content_type, "application/vnd.hancom.hwpx");
+
+    let disposition = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(disposition.contains("TEST001.hwpx"));
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    assert!(!body.is_empty());
+    assert_eq!(&body[0..2], &[0x50, 0x4B], "유효한 ZIP 파일이어야 함");
+}
+
+#[tokio::test]
+async fn test_convert_async_failed_job() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = create_router(&test_config_with_output(tmp.path().to_path_buf()));
+
+    // 빈 테이블로 변환 실패 유도
+    let json_body = r#"{
+        "responseCode": "0",
+        "data": {
+            "article": {
+                "atclId": "FAIL001",
+                "subject": "실패테스트",
+                "contents": [
+                    { "type": "table", "value": "<table></table>" }
+                ]
+            }
+        }
+    }"#;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/async")
+        .header("content-type", "application/json")
+        .body(Body::from(json_body))
+        .unwrap();
+
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::ACCEPTED);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["jobId"].as_str().unwrap();
+
+    // 실패 대기
+    let result = poll_job_completed(&app, job_id).await;
+    assert_eq!(result["status"], "failed");
+    assert!(result["error"].as_str().is_some());
+}
+
+#[tokio::test]
+async fn test_health_with_queue_info() {
+    let app = create_router(&test_config());
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "healthy");
+    assert!(json["queue"]["pending"].as_u64().is_some());
+    assert!(json["queue"]["processing"].as_u64().is_some());
+    assert!(json["queue"]["completed"].as_u64().is_some());
+    assert!(json["queue"]["failed"].as_u64().is_some());
+    assert!(json["workers"]["active"].as_u64().is_some());
+    assert!(json["workers"]["max"].as_u64().is_some());
+}
+
+#[tokio::test]
+async fn test_openapi_includes_async_paths() {
+    let app = create_router(&test_config());
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api-docs/openapi.json")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["paths"]["/api/v1/convert/async"].is_object());
+    assert!(json["paths"]["/api/v1/jobs/{id}"].is_object());
+    assert!(json["paths"]["/api/v1/jobs/{id}/download"].is_object());
 }
