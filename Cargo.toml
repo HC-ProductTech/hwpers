@@ -35,7 +35,7 @@ block-padding = "0.3"
 clap = { version = "4", features = ["derive"] }
 scraper = "0.21"
 base64 = "0.22"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp", "avif"] }
 reqwest = { version = "0.12", features = ["blocking"] }
 
 [[bin]]
