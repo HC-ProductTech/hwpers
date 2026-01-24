@@ -1,4 +1,22 @@
-/target
-test-files
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
 
-.serena
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Output
+*.hwpx
+output/

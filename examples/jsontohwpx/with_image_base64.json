@@ -1,0 +1,28 @@
+{
+  "responseCode": "0",
+  "responseText": "SUCCESS",
+  "data": {
+    "article": {
+      "atclId": "BA000000000000000000003",
+      "subject": "Base64 이미지 포함 문서",
+      "contents": [
+        {
+          "type": "text",
+          "value": "Base64 인코딩된 이미지가 포함된 문서입니다."
+        },
+        {
+          "type": "image",
+          "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "format": "png"
+        },
+        {
+          "type": "text",
+          "value": "이미지가 정상적으로 삽입되었습니다."
+        }
+      ],
+      "regDt": "2025-01-24 PM 03:00:00",
+      "regEmpName": "김철수",
+      "regDeptName": "디자인팀"
+    }
+  }
+}

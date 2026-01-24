@@ -1,0 +1,23 @@
+{
+  "responseCode": "0",
+  "responseText": "SUCCESS",
+  "data": {
+    "article": {
+      "atclId": "IMG_TEST_JPEG_001",
+      "subject": "[테스트] JPEG 이미지 삽입",
+      "contents": [
+        {
+          "type": "text",
+          "value": "JPEG 확장자 이미지 삽입 테스트입니다."
+        },
+        {
+          "type": "image",
+          "url": "./test_img.jpeg"
+        }
+      ],
+      "regDt": "2025-01-24 AM 10:02:00",
+      "regEmpName": "테스터",
+      "regDeptName": "QA팀"
+    }
+  }
+}

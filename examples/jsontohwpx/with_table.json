@@ -1,0 +1,27 @@
+{
+  "responseCode": "0",
+  "responseText": "SUCCESS",
+  "data": {
+    "article": {
+      "atclId": "BA000000000000000000004",
+      "subject": "[보고] 1분기 실적 보고서",
+      "contents": [
+        {
+          "type": "text",
+          "value": "2025년 1분기 실적을 보고합니다.\n\n아래 표를 참고해주세요."
+        },
+        {
+          "type": "table",
+          "value": "<table><thead><tr><th>구분</th><th>1월</th><th>2월</th><th>3월</th></tr></thead><tbody><tr><td>매출</td><td>1,200만</td><td>1,350만</td><td>1,500만</td></tr><tr><td>비용</td><td>800만</td><td>850만</td><td>900만</td></tr><tr><td>이익</td><td>400만</td><td>500만</td><td>600만</td></tr></tbody></table>"
+        },
+        {
+          "type": "text",
+          "value": "전년 동기 대비 15% 성장을 달성했습니다.\n감사합니다."
+        }
+      ],
+      "regDt": "2025-03-31 PM 05:00:00",
+      "regEmpName": "박영희",
+      "regDeptName": "경영지원팀"
+    }
+  }
+}

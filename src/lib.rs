@@ -1,6 +1,7 @@
 pub mod crypto;
 pub mod error;
 pub mod hwpx;
+pub mod jsontohwpx;
 pub mod model;
 pub mod parser;
 pub mod preview;

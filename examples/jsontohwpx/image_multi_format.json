@@ -1,0 +1,63 @@
+{
+  "responseCode": "0",
+  "responseText": "SUCCESS",
+  "data": {
+    "article": {
+      "atclId": "IMG_TEST_MULTI_001",
+      "subject": "[테스트] 다양한 포맷 이미지 혼합 문서",
+      "contents": [
+        {
+          "type": "text",
+          "value": "다양한 이미지 포맷이 하나의 문서에 혼합된 테스트입니다."
+        },
+        {
+          "type": "text",
+          "value": "1. PNG 이미지:"
+        },
+        {
+          "type": "image",
+          "url": "./test_img.png"
+        },
+        {
+          "type": "text",
+          "value": "2. JPG 이미지:"
+        },
+        {
+          "type": "image",
+          "url": "./test_img.jpg"
+        },
+        {
+          "type": "text",
+          "value": "3. GIF 이미지:"
+        },
+        {
+          "type": "image",
+          "url": "./test_img.gif"
+        },
+        {
+          "type": "text",
+          "value": "4. WebP 이미지:"
+        },
+        {
+          "type": "image",
+          "url": "./test_img.webp"
+        },
+        {
+          "type": "text",
+          "value": "5. AVIF 이미지:"
+        },
+        {
+          "type": "image",
+          "url": "./test_img.avif"
+        },
+        {
+          "type": "text",
+          "value": "모든 이미지가 정상적으로 삽입되었는지 확인합니다."
+        }
+      ],
+      "regDt": "2025-01-24 AM 11:00:00",
+      "regEmpName": "테스터",
+      "regDeptName": "QA팀"
+    }
+  }
+}

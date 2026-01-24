@@ -1,0 +1,19 @@
+{
+  "responseCode": "0",
+  "responseText": "SUCCESS",
+  "data": {
+    "article": {
+      "atclId": "BA000000000000000000001",
+      "subject": "간단한 텍스트 문서 테스트",
+      "contents": [
+        {
+          "type": "text",
+          "value": "안녕하세요.\n\n이것은 간단한 텍스트 문서 변환 테스트입니다.\n줄바꿈이 포함된 텍스트도 올바르게 처리되어야 합니다.\n\n세 번째 단락입니다."
+        }
+      ],
+      "regDt": "2025-01-24 AM 10:00:00",
+      "regEmpName": "홍길동",
+      "regDeptName": "개발팀"
+    }
+  }
+}

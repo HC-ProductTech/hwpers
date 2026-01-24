@@ -1,169 +1,167 @@
-# CLAUDE.md
+# jsontohwpx - JSON to HWPX 변환기
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## 프로젝트 개요
 
-## Project Overview
+JSON 데이터를 HWPX (한글 오피스 XML) 문서로 변환하는 Rust 라이브러리 및 REST API 서비스.
 
-`hwpers` is a Rust library for parsing Korean Hangul Word Processor (HWP) 5.0 files with full layout rendering support. As of v0.3.0, it includes both **reader** (parsing) and **writer** (creation) capabilities.
+### 프로젝트 기반
+- [HC-ProductTech/hwpers](https://github.com/HC-ProductTech/hwpers)를 clone하여 개발
+- 같은 크레이트 내에서 `crate::hwpx::HwpxWriter` 직접 사용
+- jsontohwpx는 hwpers에 추가되는 바이너리 타겟 + 모듈
 
-## Development Commands
+## 개발 명령어
 
-### Building
 ```bash
-cargo build              # Debug build
-cargo build --release    # Release build (optimized)
-cargo check              # Fast syntax/type check without producing binary
+# 빌드
+cargo build
+cargo build --release
+
+# 테스트
+cargo test                                    # 전체 테스트
+cargo test jsontohwpx                         # jsontohwpx 관련 테스트만
+cargo test -- --nocapture                     # 출력 포함
+
+# 코드 품질
+cargo clippy -- -D warnings
+cargo fmt
+cargo fmt --check
+
+# jsontohwpx CLI 실행
+cargo run --bin jsontohwpx -- input.json              # 출력: {atclId}.hwpx
+cargo run --bin jsontohwpx -- input.json -o out.hwpx  # 출력 지정
+cargo run --bin jsontohwpx -- --validate input.json   # 검증만
+cargo run --bin jsontohwpx -- input.json --json       # JSON 에러 출력
+
+# API 서버 (2차 개발)
+cargo run --bin jsontohwpx-api
+# 동기: POST /api/v1/convert
+# 비동기: POST /api/v1/convert/async → GET /api/v1/jobs/{id}/download
 ```
 
-### Testing
-```bash
-cargo test                        # Run all tests
-cargo test <test_name>           # Run specific test (substring match)
-cargo test --release             # Run tests in release mode (faster execution)
-cargo test -- --nocapture        # Show println! output from tests
-cargo test --test <test_file>    # Run specific test file (e.g., integration_test)
-```
+## 아키텍처
 
-### Code Quality
-```bash
-cargo clippy             # Linter - catches common mistakes and suggests improvements
-cargo fmt                # Format code according to Rust style guidelines
-cargo doc                # Generate and open documentation
-cargo doc --open         # Generate docs and open in browser
-```
-
-### Running the CLI Tool
-```bash
-cargo run --bin hwp_info -- <file.hwp>    # Inspect HWP file structure
-cargo install --path .                    # Install hwp_info locally
-hwp_info <file.hwp>                      # If installed
-```
-
-## Architecture
-
-### Core Components
-
-The codebase is organized into distinct layers:
-
-1. **Reader Layer** (`src/reader/`)
-   - `cfb.rs` - Compound File Binary format handler
-   - `stream.rs` - Stream abstraction for reading CFB streams
-   - Entry point: `HwpReader::from_file()` or `HwpReader::from_bytes()`
-
-2. **Parser Layer** (`src/parser/`)
-   - `header.rs` - File header and metadata parsing
-   - `doc_info.rs` - Document properties, styles, fonts, formatting tables
-   - `body_text.rs` - Content sections (sections → paragraphs → text)
-   - `record.rs` - Low-level record parsing
-   - Parsers operate on uncompressed streams and build the model
-
-3. **Model Layer** (`src/model/`)
-   - `document.rs` - Root `HwpDocument` struct
-   - `paragraph.rs` - Text paragraphs with formatting
-   - `char_shape.rs` - Character formatting (font, size, style)
-   - `para_shape.rs` - Paragraph formatting (alignment, indent)
-   - `control.rs` - Embedded objects (tables, images, etc.)
-   - `hyperlink.rs`, `header_footer.rs`, `page_layout.rs`, etc.
-   - The model is a complete in-memory representation of the HWP document
-
-4. **Render Layer** (`src/render/`)
-   - `layout.rs` - Layout engine that reconstructs visual layout
-   - `renderer.rs` - SVG renderer
-   - Converts document model + layout data → visual representation
-
-5. **Writer Layer** (`src/writer/`) - **v0.3.0+**
-   - `mod.rs` - `HwpWriter` API for creating HWP files
-   - `serializer.rs` - Converts model to CFB format
-   - `style.rs` - Style definitions and formatting
-   - **Status**: Early development, many features incomplete (see README limitations)
-
-6. **Utils Layer** (`src/utils/`)
-   - `compression.rs` - zlib compression/decompression
-   - `encoding.rs` - UTF-16LE and other encodings
-
-### Document Structure Hierarchy
+hwpers 레포를 clone한 후 아래 파일들을 추가:
 
 ```
-HwpDocument
-├── FileHeader              # Format version, compression flags
-├── DocInfo                 # Document-wide properties
-│   ├── Styles              # Style definitions
-│   ├── CharShapes          # Character formatting table
-│   ├── ParaShapes          # Paragraph formatting table
-│   ├── BorderFills         # Border/fill definitions
-│   └── FaceNames           # Font definitions
-└── BodyTexts               # Content sections
-    └── Sections            # Page sections
-        └── Paragraphs      # Text paragraphs
-            ├── ParaText    # Actual text content
-            ├── CharShapes  # Character runs (position → style)
-            └── Controls    # Embedded objects (tables, images)
+hwpers/                          # clone 기반
+├── src/
+│   ├── lib.rs                   # (기존) hwpers 라이브러리
+│   ├── hwpx/                    # (기존) HwpxWriter, HwpxReader
+│   ├── bin/
+│   │   └── jsontohwpx.rs       # [추가] CLI 진입점
+│   └── jsontohwpx/             # [추가] 변환 모듈
+│       ├── mod.rs
+│       ├── model.rs            # JSON 입력 모델 (article, contents, options)
+│       ├── converter.rs        # 메인 변환 로직
+│       ├── text.rs             # 텍스트 → add_paragraph
+│       ├── image.rs            # 이미지 로드/포맷변환 → add_image
+│       ├── table.rs            # HTML 파싱 → HwpxTable → add_table
+│       ├── error.rs            # 에러 타입
+│       └── api/                # REST API (2차 개발)
+│           ├── mod.rs
+│           ├── routes.rs
+│           ├── handlers.rs
+│           ├── queue.rs       # 인메모리 작업 큐
+│           └── jobs.rs        # 작업 상태 관리
+├── tests/
+│   └── jsontohwpx_*.rs         # [추가] 변환 테스트
+└── examples/jsontohwpx/         # [추가] JSON 예시 + 테스트 이미지
 ```
 
-### Key Design Patterns
+> **핵심**: `use crate::hwpx::{HwpxWriter, HwpxReader, ...}`로 내부 모듈 직접 접근.
+> HWPX 생성은 HwpxWriter가 처리, 본 모듈은 JSON 파싱 → API 호출만 담당.
 
-**Zero-copy parsing**: Where possible, parsers avoid allocating new strings and instead reference the original byte buffer.
+## JSON 입력 형식
 
-**Formatting tables**: Character and paragraph formatting are stored in document-wide tables (in `DocInfo`), and paragraphs reference them by ID. This is why you see `char_shape_id` and `para_shape_id` fields.
+```json
+{
+  "responseCode": "0",
+  "responseText": "SUCCESS",
+  "options": {
+    "includeHeader": true,
+    "headerFields": ["subject", "regEmpName", "regDeptName", "regDt"]
+  },
+  "data": {
+    "article": {
+      "atclId": "고유ID",
+      "subject": "문서 제목",
+      "contents": [
+        { "type": "text", "value": "텍스트" },
+        { "type": "image", "url": "./path.png" },
+        { "type": "image", "base64": "...", "format": "png" },
+        { "type": "table", "value": "<table>...</table>" }
+      ],
+      "regDt": "작성일시",
+      "regEmpName": "작성자",
+      "regDeptName": "부서"
+    }
+  }
+}
+```
 
-**Control objects**: Embedded content (tables, images, text boxes) are represented as "controls" with a control header defining type and properties.
+- `responseCode` "0" 필수, 아니면 에러 처리
+- `contents` 배열 순서대로 문서에 삽입 (atclCn 등 다른 본문 필드 무시)
+- `options.includeHeader`: true면 메타데이터를 본문 상단에 텍스트로 삽입
+- `type: "text"`: `\n` = 새 단락, `\n\n` = 빈 단락 포함, 연속 text 요소 사이 빈 단락
+- `type: "table"`: HTML `<table>` 구조만 파싱 (인라인 스타일 무시)
+- `type: "image"`: 경로는 JSON 파일 기준, 외부 URL 다운로드 지원
+- 출력 파일명: `{atclId}.hwpx` 자동 생성 (-o로 오버라이드)
 
-**Layout reconstruction**: When layout data is present (line segments, character positions), the render layer can reconstruct pixel-perfect positioning. Otherwise, it falls back to estimated layout.
+## 이미지 포맷 지원
 
-## Testing Strategy
+| 포맷 | HWPX 네이티브 | 처리 |
+|------|---------------|------|
+| PNG, JPG/JPEG, BMP | O | 그대로 삽입 |
+| GIF | O | 첫 프레임을 정적 이미지로 삽입 |
+| WebP, AVIF | X | PNG 변환 후 삽입 (`image` 크레이트) |
 
-Tests are organized in the `tests/` directory as integration tests:
+- **HEIC 미지원** (libheif C 라이브러리 의존성 제외)
+- 포맷 감지: 확장자 우선, 확장자 없으면 매직 바이트로 판별
+- 이미지 크기: 원본 그대로 삽입
+- 외부 URL: 다운로드 지원 (타임아웃 60초, 실패 시 전체 변환 중단)
 
-- `integration_test.rs` - Basic parsing and text extraction
-- `writer_test.rs` - Document creation
-- `roundtrip_test.rs` - Write → Read verification
-- `hyperlink_test.rs`, `table_test.rs`, `image_test.rs`, etc. - Feature-specific tests
-- `serialization_test.rs` - Low-level format serialization
+## 변환 흐름
 
-Test files are stored in `test-files/` directory (not committed to git).
+```
+JSON 입력 → 파싱(serde) → contents 순회 → HwpxWriter 호출 → .hwpx 출력
+                                              ↓
+                              text  → add_paragraph()
+                              image → add_image() / add_image_from_file()
+                              table → HwpxTable::new() + add_table()
+```
 
-## Writer Limitations (v0.3.0)
+## 개발 원칙
 
-The writer is in early development. Before working on writer features, check:
+### TDD 필수
+1. **Red**: 실패하는 테스트 먼저 작성
+2. **Green**: 최소 코드로 통과
+3. **Refactor**: 코드 품질 개선
 
-1. **README.md** "Writer Limitations" section for current status
-2. **MISSING_FEATURES.md** for detailed implementation gaps
-3. Key issues:
-   - Images don't display (BinData stream not implemented)
-   - Header/Footer text storage incomplete
-   - Hyperlink position tracking needs refinement
-   - Style management uses hardcoded IDs
-   - No compression support for writing
+### Tidy First
+- 구조적 변경과 기능적 변경을 분리
+- 리팩토링 커밋과 기능 커밋 분리
 
-## Common Development Patterns
+### 커밋 워크플로우
+`/plan` → 구현 (TDD) → `/review` → `/verify` → `/commit-push-pr`
 
-### Adding a new parser feature
-1. Add model struct in `src/model/`
-2. Add parser logic in `src/parser/doc_info.rs` or `src/parser/body_text.rs`
-3. Update `HwpDocument` to store the parsed data
-4. Add integration test in `tests/`
+## 테스트 전략
 
-### Adding a new writer feature
-1. Ensure model struct exists in `src/model/`
-2. Add serialization logic in `src/writer/serializer.rs`
-3. Add public API method in `src/writer/mod.rs`
-4. Add roundtrip test in `tests/roundtrip_test.rs`
+### examples 기반 테스트
+`examples/jsontohwpx/` 폴더에 JSON 예시 파일을 두고, 이를 변환하여 결과 검증:
+- **HwpxReader 기반 검증**: 생성된 HWPX를 HwpxReader로 읽어 텍스트/구조 확인
+- XML 내용 파싱하여 기대값과 비교
+- 한글 오피스에서 열리는지 수동 확인 (별도 단계)
 
-### Working with formatting
-- Character formatting: `document.get_char_shape(id)` retrieves from table
-- Paragraph formatting: `document.get_para_shape(id)` retrieves from table
-- Formatting IDs are 0-based indices into the respective tables
+### 단위 테스트
+각 모듈에 `#[cfg(test)]` 블록으로 단위 테스트 작성.
 
-## File Format Notes
+### 통합 테스트
+`tests/` 디렉토리에 엔드투엔드 변환 테스트 배치.
 
-- HWP 5.0 uses Microsoft CFB (Compound File Binary) format
-- Streams may be compressed with zlib
-- Text encoding is UTF-16LE
-- Binary data uses little-endian byte order
-- Records have tag-based structure (tag + size + data)
+## 코드 품질 기준
 
-## Release Process
-
-Version follows semantic versioning. Recent versions:
-- v0.3.0 - Writer functionality added (partial)
-- v0.2.0 - Reader functionality
+- `cargo clippy` 경고 0건
+- `cargo fmt --check` 통과
+- 테스트 커버리지 80% 이상
+- `unwrap()` 사용 금지 (테스트 코드 제외)
+- 모든 public API에 문서 주석 (`///`)
