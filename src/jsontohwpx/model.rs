@@ -14,7 +14,10 @@ pub struct ApiResponse {
 }
 
 impl ApiResponse {
-    /// responseCode가 "0"인지 검증
+    /// 입력 데이터 검증
+    ///
+    /// - responseCode == "0" 확인
+    /// - atclId 비어있지 않음 확인
     pub fn validate(&self) -> Result<()> {
         if self.response_code != "0" {
             return Err(JsonToHwpxError::Input(format!(
@@ -23,6 +26,11 @@ impl ApiResponse {
                 self.response_text.as_deref().unwrap_or("")
             )));
         }
+
+        if self.data.article.atcl_id.trim().is_empty() {
+            return Err(JsonToHwpxError::Input("atclId가 비어있습니다".to_string()));
+        }
+
         Ok(())
     }
 }
@@ -167,6 +175,66 @@ mod tests {
 
         let response: ApiResponse = serde_json::from_str(json).unwrap();
         assert!(response.data.article.contents.is_empty());
+    }
+
+    #[test]
+    fn test_invalid_json() {
+        let json = r#"{ this is not valid json }"#;
+        let result = serde_json::from_str::<ApiResponse>(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_unknown_content_type() {
+        let json = r#"{
+            "responseCode": "0",
+            "data": {
+                "article": {
+                    "atclId": "T1",
+                    "subject": "S",
+                    "contents": [
+                        { "type": "unknown", "value": "test" }
+                    ]
+                }
+            }
+        }"#;
+
+        let result = serde_json::from_str::<ApiResponse>(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_missing_atcl_id() {
+        let json = r#"{
+            "responseCode": "0",
+            "data": {
+                "article": {
+                    "subject": "S",
+                    "contents": []
+                }
+            }
+        }"#;
+
+        let result = serde_json::from_str::<ApiResponse>(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_empty_atcl_id_validation() {
+        let json = r#"{
+            "responseCode": "0",
+            "data": {
+                "article": {
+                    "atclId": "  ",
+                    "subject": "S",
+                    "contents": []
+                }
+            }
+        }"#;
+
+        let response: ApiResponse = serde_json::from_str(json).unwrap();
+        let err = response.validate().unwrap_err();
+        assert_eq!(err.exit_code(), 1);
     }
 
     #[test]
