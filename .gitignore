@@ -22,3 +22,6 @@ Thumbs.db
 # Output
 *.hwpx
 output/
+
+# Docker (cargo vendor)
+vendor/
