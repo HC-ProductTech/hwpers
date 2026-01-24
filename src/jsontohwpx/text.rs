@@ -63,4 +63,38 @@ mod tests {
         let bytes = writer.to_bytes().unwrap();
         assert!(!bytes.is_empty());
     }
+
+    #[test]
+    fn test_empty_value() {
+        let mut writer = HwpxWriter::new();
+        add_text_paragraphs(&mut writer, "").unwrap();
+
+        let bytes = writer.to_bytes().unwrap();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_special_characters() {
+        let mut writer = HwpxWriter::new();
+        add_text_paragraphs(&mut writer, "특수문자: <tag> & \"quotes\" 'apos'").unwrap();
+
+        let bytes = writer.to_bytes().unwrap();
+        assert!(!bytes.is_empty());
+
+        let doc = crate::HwpxReader::from_bytes(&bytes).unwrap();
+        let text = doc.extract_text();
+        assert!(text.contains("<tag>") || text.contains("&lt;tag&gt;"));
+    }
+
+    #[test]
+    fn test_text_with_hwpx_reader_verification() {
+        let mut writer = HwpxWriter::new();
+        add_text_paragraphs(&mut writer, "검증용 텍스트\n두번째 줄").unwrap();
+
+        let bytes = writer.to_bytes().unwrap();
+        let doc = crate::HwpxReader::from_bytes(&bytes).unwrap();
+        let text = doc.extract_text();
+        assert!(text.contains("검증용 텍스트"));
+        assert!(text.contains("두번째 줄"));
+    }
 }

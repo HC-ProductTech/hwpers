@@ -269,3 +269,36 @@ fn test_invalid_response_code_fails() {
     let result = jsontohwpx::convert(&input, &base_path());
     assert!(result.is_err(), "responseCode != 0이면 에러를 반환해야 함");
 }
+
+// --- 예제 JSON 파일 기반 통합 테스트 ---
+
+/// 예제 JSON 파일을 읽어 변환 + 검증
+fn convert_example_file(filename: &str) -> hwpers::HwpDocument {
+    let path = base_path().join(filename);
+    let json = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("예제 파일 읽기 실패: {} ({})", path.display(), e));
+    let input: ApiResponse = serde_json::from_str(&json)
+        .unwrap_or_else(|e| panic!("JSON 파싱 실패: {} ({})", filename, e));
+    let bytes = jsontohwpx::convert(&input, &base_path())
+        .unwrap_or_else(|e| panic!("변환 실패: {} ({})", filename, e));
+    verify_hwpx_bytes(&bytes)
+}
+
+#[test]
+fn test_example_simple_text() {
+    let doc = convert_example_file("simple_text.json");
+    let text = doc.extract_text();
+    assert!(text.contains("안녕하세요"));
+    assert!(text.contains("간단한 텍스트 문서 변환 테스트"));
+    assert!(text.contains("세 번째 단락"));
+}
+
+#[test]
+fn test_example_with_metadata_header() {
+    let doc = convert_example_file("with_metadata_header.json");
+    let text = doc.extract_text();
+    assert!(text.contains("사내 시스템 점검 안내"), "제목 포함");
+    assert!(text.contains("김관리"), "작성자 포함");
+    assert!(text.contains("IT인프라팀"), "부서 포함");
+    assert!(text.contains("2025년 2월 1일"), "본문 내용 포함");
+}
