@@ -1605,7 +1605,7 @@ impl HwpxWriter {
             cur_width, cur_height
         ));
         xml.push_str(concat!(
-            r#"<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" "#,
+            r#"<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" "#,
             r#"holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" "#,
             r#"horzAlign="LEFT" vertOffset="0" horzOffset="0"/>"#
         ));
