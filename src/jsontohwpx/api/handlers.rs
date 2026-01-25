@@ -156,8 +156,25 @@ pub async fn convert(
     }
 
     let atcl_id = input.data.article.atcl_id.trim().to_string();
+    let base_path = state.base_path.clone();
 
-    let bytes = jsontohwpx::convert(&input, &state.base_path).map_err(|e| {
+    // spawn_blocking으로 감싸서 blocking reqwest와 tokio 런타임 충돌 방지
+    let convert_result = tokio::task::spawn_blocking(move || {
+        jsontohwpx::convert(&input, &base_path)
+    })
+    .await
+    .map_err(|e| {
+        let resp = ErrorResponse {
+            error: ErrorDetail {
+                code: "INTERNAL_ERROR".to_string(),
+                message: format!("변환 작업 실행 실패: {}", e),
+                details: Vec::new(),
+            },
+        };
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(resp))
+    })?;
+
+    let bytes = convert_result.map_err(|e| {
         let (status, code) = match &e {
             JsonToHwpxError::Input(_) => (StatusCode::BAD_REQUEST, e.error_code()),
             _ => (StatusCode::INTERNAL_SERVER_ERROR, e.error_code()),

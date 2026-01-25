@@ -1,0 +1,27 @@
+{
+  "responseCode": "0",
+  "responseText": "SUCCESS",
+  "data": {
+    "article": {
+      "atclId": "BA000000000000000000003",
+      "subject": "[공지] 이미지 URL 테스트",
+      "contents": [
+        {
+          "type": "text",
+          "value": "안녕하세요.\n\n아래는 외부 URL에서 가져온 이미지입니다."
+        },
+        {
+          "type": "image",
+          "url": "https://gw.hancom.com/ekp/service/file/fileView?module=board&fileUrl=/C100171030/board/image/2026/01/22&fileName=985d5330-d662-4443-bc4c-9341d7cde974.jpg"
+        },
+        {
+          "type": "text",
+          "value": "이미지가 정상적으로 삽입되었습니다.\n감사합니다."
+        }
+      ],
+      "regDt": "2026-01-25 PM 12:52:00",
+      "regEmpName": "테스터",
+      "regDeptName": "QA팀"
+    }
+  }
+}

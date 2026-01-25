@@ -290,7 +290,7 @@ jsontohwpx input.json --json -o output.hwpx
       "contents": [
         { "type": "text", "value": "본문 텍스트" },
         { "type": "table", "value": "<table><tr><td>셀</td></tr></table>" },
-        { "type": "image", "value": "image.png" }
+        { "type": "image", "url": "image.png" }
       ],
       "regDt": "2025-01-24 AM 10:00:00",
       "regEmpName": "작성자",
@@ -302,11 +302,12 @@ jsontohwpx input.json --json -o output.hwpx
 
 #### 콘텐츠 타입
 
-| type | value | 설명 |
-|------|-------|------|
-| `text` | 텍스트 문자열 | 줄바꿈(`\n`) 지원 |
-| `table` | HTML 테이블 | `<table>` 태그, colspan/rowspan 지원 |
-| `image` | 파일 경로 또는 URL | PNG/JPEG/GIF/WebP/AVIF 지원 |
+| type | 필드 | 설명 |
+|------|------|------|
+| `text` | `value` | 텍스트 문자열, 줄바꿈(`\n`) 지원 |
+| `table` | `value` | HTML 테이블 (`<table>` 태그, colspan/rowspan 지원) |
+| `image` | `url` | 파일 경로 또는 HTTP URL (PNG/JPEG/GIF/WebP/AVIF 지원) |
+| `image` | `base64` + `format` | Base64 인코딩 이미지 데이터 |
 
 ### 종료 코드
 
@@ -327,6 +328,133 @@ jsontohwpx input.json --json -o output.hwpx
 [3/3] 파일 저장 중... output.hwpx
 변환 완료: output.hwpx
 ```
+
+## Docker로 실행하기
+
+### 빌드 및 실행
+
+```bash
+# 의존성 벤더링 (최초 1회)
+cargo vendor
+
+# Docker Compose로 실행
+docker compose up -d
+
+# 로그 확인
+docker compose logs -f
+
+# 종료
+docker compose down
+```
+
+### 환경 변수
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `HOST` | `0.0.0.0` | 바인딩 호스트 |
+| `PORT` | `8080` | 서버 포트 |
+| `RUST_LOG` | `info` | 로그 레벨 |
+| `MAX_REQUEST_SIZE` | `52428800` | 최대 요청 크기 (50MB) |
+| `WORKER_COUNT` | `4` | 비동기 워커 수 |
+| `FILE_EXPIRY_HOURS` | `24` | 생성 파일 만료 시간 |
+
+### docker-compose.yml 설정
+
+- **Healthcheck**: `/api/v1/health` 엔드포인트로 10초 간격 상태 확인
+- **Resource limits**: 메모리 1G, CPU 2코어 제한
+- **tmpfs**: `/tmp/jsontohwpx`에 512MB tmpfs 마운트 (변환 파일 임시 저장)
+
+## REST API
+
+서버 시작 후 Swagger UI에서 전체 API 문서를 확인할 수 있습니다: `http://localhost:8080/swagger-ui/`
+
+### 엔드포인트 목록
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `POST` | `/api/v1/convert` | 동기 변환 (즉시 HWPX 반환) |
+| `POST` | `/api/v1/convert/async` | 비동기 변환 (작업 ID 반환) |
+| `GET` | `/api/v1/jobs/:id` | 비동기 작업 상태 조회 |
+| `GET` | `/api/v1/jobs/:id/download` | 완료된 작업의 HWPX 다운로드 |
+| `POST` | `/api/v1/validate` | 입력 JSON 검증만 수행 |
+| `GET` | `/api/v1/health` | 서버 상태 확인 |
+
+### 동기 변환
+
+요청 후 즉시 HWPX 파일을 응답으로 받습니다.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/convert \
+  -H "Content-Type: application/json" \
+  -d @input.json \
+  --output output.hwpx
+```
+
+### 비동기 변환
+
+대용량 문서를 비동기로 변환합니다.
+
+```bash
+# 1. 변환 요청
+curl -X POST http://localhost:8080/api/v1/convert/async \
+  -H "Content-Type: application/json" \
+  -d @input.json
+# 응답: {"job_id":"uuid-here","status":"queued","created_at":"..."}
+
+# 2. 상태 확인
+curl http://localhost:8080/api/v1/jobs/{job_id}
+# 응답: {"job_id":"...","status":"completed","created_at":"...","completed_at":"..."}
+
+# 3. 결과 다운로드
+curl http://localhost:8080/api/v1/jobs/{job_id}/download --output result.hwpx
+```
+
+### 검증
+
+변환 없이 입력 JSON의 유효성만 검사합니다.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/validate \
+  -H "Content-Type: application/json" \
+  -d @input.json
+# 응답: {"valid":true,"errors":[]}
+```
+
+### 상태 확인
+
+```bash
+curl http://localhost:8080/api/v1/health
+# 응답:
+# {
+#   "status": "healthy",
+#   "version": "0.5.0",
+#   "queue": {"pending":0,"processing":0,"completed":0,"failed":0},
+#   "workers": {"active":0,"max":4},
+#   "uptime_seconds": 120
+# }
+```
+
+### 에러 응답
+
+모든 에러는 동일한 형식으로 반환됩니다:
+
+```json
+{
+  "error": {
+    "code": "INVALID_JSON",
+    "message": "JSON 파싱 실패: expected value at line 1 column 1",
+    "details": []
+  }
+}
+```
+
+| 에러 코드 | HTTP 상태 | 설명 |
+|-----------|-----------|------|
+| `INVALID_JSON` | 400 | JSON 파싱 실패 |
+| `INVALID_RESPONSE_CODE` | 400 | responseCode가 "0"이 아님 |
+| `MISSING_DATA` | 400 | data 또는 article 필드 누락 |
+| `CONVERSION_ERROR` | 500 | 변환 처리 중 오류 |
+| `QUEUE_ERROR` | 503 | 작업 큐 제출 실패 |
 
 ## Format Support
 
