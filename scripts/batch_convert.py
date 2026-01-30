@@ -67,34 +67,49 @@ def normalise_text(value: Optional[str]) -> Optional[str]:
 
 
 def build_contents(article: Dict) -> List[Dict]:
-    text_block = normalise_text(article.get("content_text"))
-    if text_block:
-        return [{"type": "text", "value": text_block}]
-
+    # content 배열이 있으면 우선 사용 (이미지, 테이블 등 포함)
     contents: List[Dict] = []
     for block in article.get("content", []):
         block_type = block.get("type")
         if block_type == "text":
             text = block.get("value")
+            text = normalise_text(text)
+            if text:
+                contents.append({"type": "text", "value": text})
         elif block_type == "link":
             text_part = block.get("text") or block.get("value") or ""
             url = block.get("url") or ""
             text = f"{text_part} ({url})".strip()
-        else:
-            continue
-
-        text = normalise_text(text)
-        if text:
-            contents.append({"type": "text", "value": text})
+            text = normalise_text(text)
+            if text:
+                contents.append({"type": "text", "value": text})
+        elif block_type == "image":
+            # 원본 JSON에서 url 필드가 있으면 url로 전달, 없으면 value 사용
+            if block.get("url"):
+                contents.append({"type": "image", "url": block.get("url")})
+            else:
+                image_data = block.get("value") or block.get("src")
+                if image_data:
+                    contents.append({"type": "image", "value": image_data})
+        elif block_type == "table":
+            table_html = block.get("value")
+            if table_html:
+                contents.append({"type": "table", "value": table_html})
 
     if contents:
         return contents
 
+    # content 배열이 없거나 비어있으면 content_text 사용
+    text_block = normalise_text(article.get("content_text"))
+    if text_block:
+        return [{"type": "text", "value": text_block}]
+
+    # 둘 다 없으면 제목을 fallback으로
     fallback = normalise_text(article.get("title"))
     if fallback:
-        contents.append({"type": "text", "value": fallback})
+        return [{"type": "text", "value": fallback}]
 
-    return contents
+    return []
 
 
 def ensure_unique_id(candidates: List[Optional[str]], used_ids: Set[str]) -> str:
