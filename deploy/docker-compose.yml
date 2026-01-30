@@ -1,0 +1,22 @@
+services:
+  hwp-converter:
+    container_name: hwp-converter
+    image: hwp-converter:latest
+    ports:
+      - "9040:9040"
+    environment:
+      - RUST_LOG=info
+      - HOST=0.0.0.0
+      - PORT=9040
+      - MAX_REQUEST_SIZE=52428800
+      - WORKER_COUNT=4
+      - FILE_EXPIRY_HOURS=24
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9040/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    tmpfs:
+      - /tmp/hwp-converter:size=512M
+    restart: unless-stopped
