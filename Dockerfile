@@ -26,16 +26,16 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # 출력 디렉토리 생성
-RUN mkdir -p /tmp/jsontohwpx
+RUN mkdir -p /tmp/hwp-converter
 
 # 바이너리 복사
-COPY --from=builder /app/target/release/jsontohwpx-api /usr/local/bin/jsontohwpx-api
+COPY --from=builder /app/target/release/jsontohwpx-api /usr/local/bin/hwp-converter
 
-EXPOSE 8080
+EXPOSE 9040
 
 ENV RUST_LOG=info \
     HOST=0.0.0.0 \
-    PORT=8080 \
-    OUTPUT_DIR=/tmp/jsontohwpx
+    PORT=9040 \
+    OUTPUT_DIR=/tmp/hwp-converter
 
-ENTRYPOINT ["jsontohwpx-api"]
+ENTRYPOINT ["hwp-converter"]

@@ -5,5 +5,10 @@ docs/
 tests/
 examples/
 output/
+scripts/
 .env
 .DS_Store
+.claude/
+*.md
+*.hwpx
+LICENSE
