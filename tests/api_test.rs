@@ -4,7 +4,7 @@ use axum::Router;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use hwpers::jsontohwpx::api::{create_router, ServerConfig};
+use hwpers::jsontohwpx::api::{build_state, create_router, create_router_with_state, ServerConfig};
 
 fn test_config() -> ServerConfig {
     ServerConfig {
@@ -664,4 +664,170 @@ async fn test_openapi_includes_async_paths() {
     assert!(json["paths"]["/api/v1/convert/async"].is_object());
     assert!(json["paths"]["/api/v1/jobs/{id}"].is_object());
     assert!(json["paths"]["/api/v1/jobs/{id}/download"].is_object());
+}
+
+// --- 라이선스 만료 테스트 ---
+
+fn test_config_with_license(expiry: Option<chrono::NaiveDate>) -> ServerConfig {
+    ServerConfig {
+        host: "127.0.0.1".to_string(),
+        port: 0,
+        max_request_size: 50 * 1024 * 1024,
+        base_path: std::path::PathBuf::from("examples/jsontohwpx"),
+        license_expiry: expiry,
+        ..Default::default()
+    }
+}
+
+fn create_router_with_license(expiry: Option<chrono::NaiveDate>) -> Router {
+    let config = test_config_with_license(expiry);
+    let state = build_state(&config);
+    create_router_with_state(state, config.max_request_size)
+}
+
+/// 라이선스 미설정 시 health는 license 필드 없이 healthy
+#[tokio::test]
+async fn test_health_no_license() {
+    let app = create_router_with_license(None);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "healthy");
+    assert!(json["license"].is_null(), "license 미설정 시 필드 없어야 함");
+}
+
+/// 유효한 라이선스 → health: healthy + license: valid
+#[tokio::test]
+async fn test_health_valid_license() {
+    let future_date = chrono::NaiveDate::from_ymd_opt(2099, 12, 31).unwrap();
+    let app = create_router_with_license(Some(future_date));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "healthy");
+    assert_eq!(json["license"], "valid");
+}
+
+/// 만료된 라이선스 → health: expired + license: expired (200 응답)
+#[tokio::test]
+async fn test_health_expired_license() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    // health는 만료 후에도 200으로 응답 (미들웨어 예외)
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "expired");
+    assert_eq!(json["license"], "expired");
+}
+
+/// 만료된 라이선스 → convert 요청은 503
+#[tokio::test]
+async fn test_convert_blocked_when_expired() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert")
+        .header("content-type", "application/json")
+        .body(Body::from(simple_json()))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+/// 만료된 라이선스 → validate 요청은 503
+#[tokio::test]
+async fn test_validate_blocked_when_expired() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/validate")
+        .header("content-type", "application/json")
+        .body(Body::from(simple_json()))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+/// 만료된 라이선스 → swagger-ui는 정상 접근
+#[tokio::test]
+async fn test_swagger_accessible_when_expired() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/swagger-ui")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    // swagger-ui는 만료와 무관하게 접근 가능 (200 또는 리다이렉트)
+    assert_ne!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+/// 만료된 라이선스 → api-docs는 정상 접근
+#[tokio::test]
+async fn test_api_docs_accessible_when_expired() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api-docs/openapi.json")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+/// 유효한 라이선스 → convert 정상 동작
+#[tokio::test]
+async fn test_convert_allowed_when_valid() {
+    let future_date = chrono::NaiveDate::from_ymd_opt(2099, 12, 31).unwrap();
+    let app = create_router_with_license(Some(future_date));
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert")
+        .header("content-type", "application/json")
+        .body(Body::from(simple_json()))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
 }
