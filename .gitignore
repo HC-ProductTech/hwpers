@@ -25,3 +25,4 @@ output/
 
 # Docker (cargo vendor)
 vendor/
+deploy/*.tar.gz
