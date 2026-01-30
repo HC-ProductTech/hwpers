@@ -6,8 +6,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use axum::extract::DefaultBodyLimit;
+use axum::extract::{DefaultBodyLimit, State};
+use axum::http::{Request, StatusCode};
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
 use axum::Router;
+use chrono::NaiveDate;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -65,6 +69,7 @@ pub struct AppState {
     pub output_dir: PathBuf,
     pub job_store: jobs::JobStore,
     pub queue: queue::JobQueue,
+    pub license_expiry: Option<NaiveDate>,
 }
 
 /// API 서버 설정
@@ -76,6 +81,7 @@ pub struct ServerConfig {
     pub output_dir: PathBuf,
     pub worker_count: u64,
     pub file_expiry_hours: u64,
+    pub license_expiry: Option<NaiveDate>,
 }
 
 impl Default for ServerConfig {
@@ -88,6 +94,7 @@ impl Default for ServerConfig {
             output_dir: PathBuf::from("./output"),
             worker_count: 4,
             file_expiry_hours: 24,
+            license_expiry: None,
         }
     }
 }
@@ -126,6 +133,12 @@ impl ServerConfig {
                 config.file_expiry_hours = h;
             }
         }
+        // 라이선스 만료일: 컴파일 타임에 내장된 값 사용
+        if let Some(expiry_str) = option_env!("LICENSE_EXPIRY_EMBEDDED") {
+            if let Ok(date) = NaiveDate::parse_from_str(expiry_str, "%Y-%m-%d") {
+                config.license_expiry = Some(date);
+            }
+        }
 
         config
     }
@@ -142,6 +155,7 @@ pub fn build_state(config: &ServerConfig) -> Arc<AppState> {
         output_dir: config.output_dir.clone(),
         job_store,
         queue,
+        license_expiry: config.license_expiry,
     })
 }
 
@@ -149,6 +163,38 @@ pub fn build_state(config: &ServerConfig) -> Arc<AppState> {
 pub fn create_router(config: &ServerConfig) -> Router {
     let state = build_state(config);
     create_router_with_state(state, config.max_request_size)
+}
+
+/// 라이선스 만료 체크 미들웨어
+///
+/// 만료일이 설정된 경우, 현재 날짜가 만료일을 초과하면 503을 반환합니다.
+/// health, swagger-ui, api-docs 경로는 예외 처리합니다.
+async fn license_check_middleware(
+    State(state): State<Arc<AppState>>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let path = request.uri().path().to_string();
+
+    // health, swagger-ui, api-docs는 만료와 무관하게 항상 허용
+    let is_exempt = path == "/api/v1/health"
+        || path.starts_with("/swagger-ui")
+        || path.starts_with("/api-docs");
+
+    if !is_exempt {
+        if let Some(expiry) = state.license_expiry {
+            let today = chrono::Local::now().date_naive();
+            if today > expiry {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("라이선스가 만료되었습니다 (만료일: {})", expiry),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    next.run(request).await
 }
 
 /// 주어진 AppState로 Router 생성
@@ -167,6 +213,10 @@ pub fn create_router_with_state(state: Arc<AppState>, max_request_size: usize) -
         )
         .route("/api/v1/validate", axum::routing::post(handlers::validate))
         .route("/api/v1/health", axum::routing::get(handlers::health))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            license_check_middleware,
+        ))
         .layer(DefaultBodyLimit::max(max_request_size))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

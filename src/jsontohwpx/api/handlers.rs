@@ -89,7 +89,8 @@ pub struct ValidateResponse {
     "version": "0.5.0",
     "queue": { "pending": 0, "processing": 0, "completed": 10, "failed": 1 },
     "workers": { "active": 0, "max": 4 },
-    "uptime_seconds": 3600
+    "uptime_seconds": 3600,
+    "license": "valid"
 }))]
 pub struct HealthResponse {
     /// 서버 상태
@@ -102,6 +103,9 @@ pub struct HealthResponse {
     pub workers: WorkerInfo,
     /// 가동 시간 (초)
     pub uptime_seconds: u64,
+    /// 라이선스 상태 ("valid", "expired", 또는 미설정 시 None)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
 }
 
 /// 워커 상태 정보
@@ -455,8 +459,21 @@ pub async fn validate(body: String) -> impl IntoResponse {
 pub async fn health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let uptime = state.start_time.elapsed().as_secs();
     let stats = state.job_store.stats().await;
+
+    let (status, license) = match state.license_expiry {
+        Some(expiry) => {
+            let today = chrono::Local::now().date_naive();
+            if today > expiry {
+                ("expired".to_string(), Some("expired".to_string()))
+            } else {
+                ("healthy".to_string(), Some("valid".to_string()))
+            }
+        }
+        None => ("healthy".to_string(), None),
+    };
+
     let resp = HealthResponse {
-        status: "healthy".to_string(),
+        status,
         version: env!("CARGO_PKG_VERSION").to_string(),
         queue: stats,
         workers: WorkerInfo {
@@ -464,6 +481,7 @@ pub async fn health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             max: state.queue.max_workers(),
         },
         uptime_seconds: uptime,
+        license,
     };
     Json(resp)
 }

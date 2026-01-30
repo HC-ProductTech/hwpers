@@ -3,11 +3,11 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-IMAGE_NAME="hwp-converter"
+IMAGE_NAME="hwpx-converter"
 IMAGE_TAG="${1:-latest}"
 OUTPUT_FILE="${SCRIPT_DIR}/${IMAGE_NAME}.tar.gz"
 
-echo "=== HWP Converter 이미지 빌드 ==="
+echo "=== HWPX Converter 이미지 빌드 ==="
 echo "프로젝트: ${PROJECT_DIR}"
 echo "이미지: ${IMAGE_NAME}:${IMAGE_TAG}"
 echo ""
