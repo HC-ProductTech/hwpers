@@ -216,7 +216,7 @@ pub struct ConvertFileRequest {
     pub file: String,
     /// 메타데이터를 본문 상단에 삽입할지 여부
     #[schema(default = false)]
-    pub include_header: Option<bool>,
+    pub include_header: bool,
 }
 
 /// JSON 파일을 업로드하여 HWPX 문서로 변환 (동기)
