@@ -5,6 +5,7 @@ use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::{Deserialize, Serialize};
+use utoipa::openapi::schema::{Object, ObjectBuilder, SchemaType, Type};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -208,6 +209,16 @@ pub async fn convert(
     Ok((headers, bytes))
 }
 
+/// include_header 필드의 커스텀 스키마 (true/false enum, default=false)
+fn include_header_schema() -> Object {
+    ObjectBuilder::new()
+        .schema_type(SchemaType::Type(Type::String))
+        .enum_values(Some(["false", "true"]))
+        .default(Some(serde_json::Value::String("false".to_string())))
+        .description(Some("메타데이터를 본문 상단에 삽입할지 여부"))
+        .build()
+}
+
 /// 파일 업로드 변환 요청 (OpenAPI 문서용)
 #[derive(ToSchema)]
 pub struct ConvertFileRequest {
@@ -215,8 +226,8 @@ pub struct ConvertFileRequest {
     #[schema(value_type = String, format = Binary)]
     pub file: String,
     /// 메타데이터를 본문 상단에 삽입할지 여부
-    #[schema(default = false)]
-    pub include_header: bool,
+    #[schema(schema_with = include_header_schema)]
+    pub include_header: String,
 }
 
 /// JSON 파일을 업로드하여 HWPX 문서로 변환 (동기)
