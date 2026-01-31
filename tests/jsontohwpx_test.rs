@@ -27,8 +27,7 @@ fn verify_hwpx_bytes(bytes: &[u8]) -> hwpers::HwpDocument {
 /// JSON 문자열 → HWPX 변환 → HwpxReader 검증 헬퍼
 fn convert_and_verify(json: &str) -> hwpers::HwpDocument {
     let input: ArticleDocument = serde_json::from_str(json).expect("JSON 파싱 실패");
-    let bytes =
-        jsontohwpx::convert(&input, &default_options(), &base_path()).expect("변환 실패");
+    let bytes = jsontohwpx::convert(&input, &default_options(), &base_path()).expect("변환 실패");
     verify_hwpx_bytes(&bytes)
 }
 

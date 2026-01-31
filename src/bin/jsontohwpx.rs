@@ -123,10 +123,7 @@ fn read_input(input: &str) -> Result<String, JsonToHwpxError> {
 }
 
 /// 출력 경로 결정: -o 지정 시 해당 경로, 미지정 시 {article_id}.hwpx
-fn resolve_output_path(
-    cli: &Cli,
-    input: &ArticleDocument,
-) -> Result<PathBuf, JsonToHwpxError> {
+fn resolve_output_path(cli: &Cli, input: &ArticleDocument) -> Result<PathBuf, JsonToHwpxError> {
     if let Some(ref output) = cli.output {
         Ok(output.clone())
     } else {

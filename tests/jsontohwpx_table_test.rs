@@ -79,7 +79,9 @@ fn test_table_merge_cell_structure() {
 
     let json = format!(
         r#"{{"article_id":"MERGE_STRUCT","title":"구조검증","contents":[{{"type":"table","value":"{}"}}]}}"#,
-        html.replace('\n', "").replace('"', "\\\"").replace("    ", "")
+        html.replace('\n', "")
+            .replace('"', "\\\"")
+            .replace("    ", "")
     );
 
     let input: ArticleDocument = serde_json::from_str(&json).unwrap();
@@ -112,7 +114,9 @@ fn test_table_merge_width_calculation() {
 
     let json = format!(
         r#"{{"article_id":"MERGE_WIDTH","title":"너비검증","contents":[{{"type":"table","value":"{}"}}]}}"#,
-        html.replace('\n', "").replace('"', "\\\"").replace("    ", "")
+        html.replace('\n', "")
+            .replace('"', "\\\"")
+            .replace("    ", "")
     );
 
     let input: ArticleDocument = serde_json::from_str(&json).unwrap();
@@ -128,7 +132,10 @@ fn test_table_merge_width_calculation() {
         file.read_to_string(&mut section_xml).unwrap();
     }
 
-    assert!(section_xml.contains(r#"width="28346""#), "colspan=2 셀 너비");
+    assert!(
+        section_xml.contains(r#"width="28346""#),
+        "colspan=2 셀 너비"
+    );
     assert!(section_xml.contains(r#"width="14173""#), "단일 셀 너비");
 }
 
@@ -142,7 +149,9 @@ fn test_table_merge_height_calculation() {
 
     let json = format!(
         r#"{{"article_id":"MERGE_HEIGHT","title":"높이검증","contents":[{{"type":"table","value":"{}"}}]}}"#,
-        html.replace('\n', "").replace('"', "\\\"").replace("    ", "")
+        html.replace('\n', "")
+            .replace('"', "\\\"")
+            .replace("    ", "")
     );
 
     let input: ArticleDocument = serde_json::from_str(&json).unwrap();
@@ -158,7 +167,10 @@ fn test_table_merge_height_calculation() {
         file.read_to_string(&mut section_xml).unwrap();
     }
 
-    assert!(section_xml.contains(r#"height="3000""#), "rowspan=3 셀 높이");
+    assert!(
+        section_xml.contains(r#"height="3000""#),
+        "rowspan=3 셀 높이"
+    );
     assert!(section_xml.contains(r#"height="1000""#), "일반 셀 높이");
 }
 

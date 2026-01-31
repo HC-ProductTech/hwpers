@@ -54,9 +54,7 @@ fn test_cli_auto_output_filename() {
     // simple_text.json의 article_id를 확인하여 자동 파일명 검증
     let json = std::fs::read_to_string(simple_json()).unwrap();
     let input: hwpers::jsontohwpx::ArticleDocument = serde_json::from_str(&json).unwrap();
-    let expected_file = tmp
-        .path()
-        .join(format!("{}.hwpx", input.article_id));
+    let expected_file = tmp.path().join(format!("{}.hwpx", input.article_id));
     assert!(
         expected_file.exists(),
         "자동 생성된 파일 없음: {}",
@@ -83,11 +81,7 @@ fn test_cli_validate_success() {
 fn test_cli_validate_failure() {
     let tmp = tempfile::tempdir().unwrap();
     let bad_json = tmp.path().join("bad.json");
-    std::fs::write(
-        &bad_json,
-        r#"{"article_id":"  ","title":"S"}"#,
-    )
-    .unwrap();
+    std::fs::write(&bad_json, r#"{"article_id":"  ","title":"S"}"#).unwrap();
 
     let output = Command::new(cargo_bin())
         .arg(&bad_json)

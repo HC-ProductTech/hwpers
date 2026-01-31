@@ -31,9 +31,7 @@ pub fn convert(
     writer.set_metadata(HwpxMetadata {
         title: input.title.clone().unwrap_or_default(),
         creator,
-        created_date: meta
-            .and_then(|m| m.created_at.clone())
-            .unwrap_or_default(),
+        created_date: meta.and_then(|m| m.created_at.clone()).unwrap_or_default(),
     });
 
     // includeHeader 옵션 처리

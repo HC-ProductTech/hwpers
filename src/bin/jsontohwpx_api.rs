@@ -77,9 +77,7 @@ async fn main() {
 /// Graceful shutdown 시그널 대기
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("Ctrl+C 핸들러 설치 실패");
+        signal::ctrl_c().await.expect("Ctrl+C 핸들러 설치 실패");
     };
 
     #[cfg(unix)]

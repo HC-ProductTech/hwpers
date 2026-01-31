@@ -356,10 +356,8 @@ impl HwpxTable {
         if col_span <= 1 && row_span <= 1 {
             return;
         }
-        self.cell_spans.insert(
-            (row, col),
-            CellSpan { col_span, row_span },
-        );
+        self.cell_spans
+            .insert((row, col), CellSpan { col_span, row_span });
         // Mark all cells covered by this span (except the origin)
         for r in row..row + row_span as usize {
             for c in col..col + col_span as usize {
@@ -1015,12 +1013,12 @@ impl HwpxWriter {
                 r#"</opf:spine></opf:package>"#
             ),
             HWPX_NAMESPACES,
-            title,          // opf:title
-            creator,        // creator
-            creator,        // lastsaveby
-            created_date,   // CreatedDate
-            created_date,   // ModifiedDate
-            created_date,   // date
+            title,        // opf:title
+            creator,      // creator
+            creator,      // lastsaveby
+            created_date, // CreatedDate
+            created_date, // ModifiedDate
+            created_date, // date
             sections_manifest,
             images_manifest,
             sections_spine
@@ -1068,7 +1066,9 @@ impl HwpxWriter {
         xml.push_str(r#"<hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>"#);
         xml.push_str("<hh:leftBorder type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/><hh:rightBorder type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/>");
         xml.push_str("<hh:topBorder type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/><hh:bottomBorder type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/>");
-        xml.push_str("<hh:diagonal type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/></hh:borderFill>");
+        xml.push_str(
+            "<hh:diagonal type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/></hh:borderFill>",
+        );
         xml.push_str("</hh:borderFills>");
 
         xml.push_str(&self.generate_char_properties());
@@ -1639,7 +1639,10 @@ impl HwpxWriter {
                 r#"<hp:outMargin left="283" right="283" top="283" bottom="283"/>"#,
                 r#"<hp:inMargin left="510" right="510" top="142" bottom="142"/>"#
             ),
-            self.next_table_id, row_cnt, col_cnt, total_width,
+            self.next_table_id,
+            row_cnt,
+            col_cnt,
+            total_width,
             cell_height * row_cnt as u32
         );
 
