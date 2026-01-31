@@ -54,7 +54,8 @@ docker compose restart
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | `GET` | `/api/v1/health` | 서버 상태 확인 |
-| `POST` | `/api/v1/convert` | 동기 변환 (즉시 HWPX 반환) |
+| `POST` | `/api/v1/convert` | 동기 변환 (JSON body, 즉시 HWPX 반환) |
+| `POST` | `/api/v1/convert/file` | 동기 변환 (파일 업로드, 즉시 HWPX 반환) |
 | `POST` | `/api/v1/convert/async` | 비동기 변환 (작업 ID 반환) |
 | `GET` | `/api/v1/jobs/{id}` | 비동기 작업 상태 조회 |
 | `GET` | `/api/v1/jobs/{id}/download` | 비동기 작업 결과 다운로드 |
@@ -107,6 +108,30 @@ curl -X POST http://localhost:9040/api/v1/convert \
 
 echo "생성됨: DOC001.hwpx"
 ```
+
+---
+
+## 4-1. 파일 업로드 동기 변환 (POST /api/v1/convert/file)
+
+JSON 파일을 multipart/form-data로 업로드하면 즉시 HWPX 파일을 반환합니다.
+
+```bash
+# 기본 변환
+curl -X POST http://localhost:9040/api/v1/convert/file \
+  -F "file=@input.json" \
+  --output result.hwpx
+
+# include_header 옵션 포함
+curl -X POST http://localhost:9040/api/v1/convert/file \
+  -F "file=@input.json" \
+  -F "include_header=true" \
+  --output result.hwpx
+```
+
+| 필드 | 필수 | 설명 |
+|------|------|------|
+| `file` | O | JSON 파일 (multipart file) |
+| `include_header` | - | `true`이면 메타데이터를 본문 상단에 삽입 |
 
 ---
 

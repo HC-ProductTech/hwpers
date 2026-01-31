@@ -34,6 +34,7 @@ use jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
     ),
     paths(
         handlers::convert,
+        handlers::convert_file,
         handlers::convert_async,
         handlers::get_job,
         handlers::download_job,
@@ -202,6 +203,10 @@ pub fn create_router_with_state(state: Arc<AppState>, max_request_size: usize) -
     Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/api/v1/convert", axum::routing::post(handlers::convert))
+        .route(
+            "/api/v1/convert/file",
+            axum::routing::post(handlers::convert_file),
+        )
         .route(
             "/api/v1/convert/async",
             axum::routing::post(handlers::convert_async),

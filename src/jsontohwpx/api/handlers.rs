@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{Multipart, Path, State};
 use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
@@ -164,20 +164,158 @@ pub async fn convert(
     let options = ConvertOptions::default();
 
     // spawn_blocking으로 감싸서 blocking reqwest와 tokio 런타임 충돌 방지
-    let convert_result = tokio::task::spawn_blocking(move || {
-        jsontohwpx::convert(&input, &options, &base_path)
-    })
-    .await
-    .map_err(|e| {
+    let convert_result =
+        tokio::task::spawn_blocking(move || jsontohwpx::convert(&input, &options, &base_path))
+            .await
+            .map_err(|e| {
+                let resp = ErrorResponse {
+                    error: ErrorDetail {
+                        code: "INTERNAL_ERROR".to_string(),
+                        message: format!("변환 작업 실행 실패: {}", e),
+                        details: Vec::new(),
+                    },
+                };
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(resp))
+            })?;
+
+    let bytes = convert_result.map_err(|e| {
+        let (status, code) = match &e {
+            JsonToHwpxError::Input(_) => (StatusCode::BAD_REQUEST, e.error_code()),
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, e.error_code()),
+        };
         let resp = ErrorResponse {
             error: ErrorDetail {
-                code: "INTERNAL_ERROR".to_string(),
-                message: format!("변환 작업 실행 실패: {}", e),
+                code: code.to_string(),
+                message: e.to_string(),
                 details: Vec::new(),
             },
         };
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(resp))
+        (status, Json(resp))
     })?;
+
+    let filename = format!("{}.hwpx", article_id);
+    let headers = [
+        (
+            header::CONTENT_TYPE,
+            "application/vnd.hancom.hwpx".to_string(),
+        ),
+        (
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", filename),
+        ),
+    ];
+
+    Ok((headers, bytes))
+}
+
+/// JSON 파일을 업로드하여 HWPX 문서로 변환 (동기)
+///
+/// multipart/form-data로 JSON 파일을 업로드하면 HWPX 바이너리를 즉시 반환합니다.
+/// `file` 필드에 JSON 파일, `include_header` 필드(선택)에 bool 값을 전달합니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/convert/file",
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "변환 성공 (HWPX 바이너리)", content_type = "application/vnd.hancom.hwpx"),
+        (status = 400, description = "잘못된 입력", body = ErrorResponse),
+        (status = 500, description = "변환 실패", body = ErrorResponse),
+    ),
+    tag = "변환"
+)]
+pub async fn convert_file(
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let mut file_bytes: Option<Vec<u8>> = None;
+    let mut include_header = false;
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        let resp = ErrorResponse {
+            error: ErrorDetail {
+                code: "MULTIPART_ERROR".to_string(),
+                message: format!("multipart 파싱 실패: {}", e),
+                details: Vec::new(),
+            },
+        };
+        (StatusCode::BAD_REQUEST, Json(resp))
+    })? {
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "file" => {
+                let bytes = field.bytes().await.map_err(|e| {
+                    let resp = ErrorResponse {
+                        error: ErrorDetail {
+                            code: "MULTIPART_ERROR".to_string(),
+                            message: format!("파일 읽기 실패: {}", e),
+                            details: Vec::new(),
+                        },
+                    };
+                    (StatusCode::BAD_REQUEST, Json(resp))
+                })?;
+                file_bytes = Some(bytes.to_vec());
+            }
+            "include_header" => {
+                let text = field.text().await.unwrap_or_default();
+                include_header = text == "true" || text == "1";
+            }
+            _ => {}
+        }
+    }
+
+    let file_bytes = file_bytes.ok_or_else(|| {
+        let resp = ErrorResponse {
+            error: ErrorDetail {
+                code: "MISSING_FILE".to_string(),
+                message: "file 필드가 필요합니다".to_string(),
+                details: Vec::new(),
+            },
+        };
+        (StatusCode::BAD_REQUEST, Json(resp))
+    })?;
+
+    let input: ArticleDocument = serde_json::from_slice(&file_bytes).map_err(|e| {
+        let resp = ErrorResponse {
+            error: ErrorDetail {
+                code: "INVALID_JSON".to_string(),
+                message: format!("JSON 파싱 실패: {}", e),
+                details: Vec::new(),
+            },
+        };
+        (StatusCode::BAD_REQUEST, Json(resp))
+    })?;
+
+    if let Err(e) = input.validate() {
+        let resp = ErrorResponse {
+            error: ErrorDetail {
+                code: e.error_code().to_string(),
+                message: e.to_string(),
+                details: Vec::new(),
+            },
+        };
+        return Err((StatusCode::BAD_REQUEST, Json(resp)));
+    }
+
+    let article_id = input.article_id.trim().to_string();
+    let base_path = state.base_path.clone();
+    let options = ConvertOptions {
+        include_header,
+        ..ConvertOptions::default()
+    };
+
+    let convert_result =
+        tokio::task::spawn_blocking(move || jsontohwpx::convert(&input, &options, &base_path))
+            .await
+            .map_err(|e| {
+                let resp = ErrorResponse {
+                    error: ErrorDetail {
+                        code: "INTERNAL_ERROR".to_string(),
+                        message: format!("변환 작업 실행 실패: {}", e),
+                        details: Vec::new(),
+                    },
+                };
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(resp))
+            })?;
 
     let bytes = convert_result.map_err(|e| {
         let (status, code) = match &e {

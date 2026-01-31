@@ -74,7 +74,12 @@ async fn test_convert_success() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     // Content-Type 확인
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert_eq!(content_type, "application/vnd.hancom.hwpx");
 
     // Content-Disposition 확인
@@ -357,7 +362,8 @@ async fn test_swagger_ui_redirect() {
     let resp = app.oneshot(req).await.unwrap();
     // Swagger UI는 /swagger-ui/ 로 리다이렉트하거나 200 반환
     assert!(
-        resp.status() == StatusCode::OK || resp.status() == StatusCode::MOVED_PERMANENTLY
+        resp.status() == StatusCode::OK
+            || resp.status() == StatusCode::MOVED_PERMANENTLY
             || resp.status() == StatusCode::TEMPORARY_REDIRECT
             || resp.status() == StatusCode::SEE_OTHER,
     );
@@ -532,7 +538,12 @@ async fn test_convert_async_download() {
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert_eq!(content_type, "application/vnd.hancom.hwpx");
 
     let disposition = resp
@@ -662,7 +673,10 @@ async fn test_health_no_license() {
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["status"], "healthy");
-    assert!(json["license"].is_null(), "license 미설정 시 필드 없어야 함");
+    assert!(
+        json["license"].is_null(),
+        "license 미설정 시 필드 없어야 함"
+    );
 }
 
 /// 유효한 라이선스 → health: healthy + license: valid
@@ -773,6 +787,177 @@ async fn test_api_docs_accessible_when_expired() {
 
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
+}
+
+// --- convert/file (파일 업로드) 테스트 ---
+
+fn multipart_body(boundary: &str, fields: &[(&str, Option<&str>, &[u8])]) -> Vec<u8> {
+    let mut body = Vec::new();
+    for (name, filename, data) in fields {
+        body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+        if let Some(fname) = filename {
+            body.extend_from_slice(
+                format!(
+                    "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
+                    name, fname
+                )
+                .as_bytes(),
+            );
+            body.extend_from_slice(b"Content-Type: application/json\r\n");
+        } else {
+            body.extend_from_slice(
+                format!("Content-Disposition: form-data; name=\"{}\"\r\n", name).as_bytes(),
+            );
+        }
+        body.extend_from_slice(b"\r\n");
+        body.extend_from_slice(data);
+        body.extend_from_slice(b"\r\n");
+    }
+    body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+    body
+}
+
+#[tokio::test]
+async fn test_convert_file_success() {
+    let app = create_router(&test_config());
+    let boundary = "----TestBoundary12345";
+    let json_bytes = simple_json().as_bytes();
+
+    let body = multipart_body(boundary, &[("file", Some("input.json"), json_bytes)]);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/file")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(content_type, "application/vnd.hancom.hwpx");
+
+    let disposition = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(disposition.contains("TEST001.hwpx"));
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    assert!(!body.is_empty());
+    assert_eq!(&body[0..2], &[0x50, 0x4B], "유효한 ZIP 파일이어야 함");
+}
+
+#[tokio::test]
+async fn test_convert_file_no_file_field() {
+    let app = create_router(&test_config());
+    let boundary = "----TestBoundary12345";
+
+    let body = multipart_body(boundary, &[("other", None, b"something")]);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/file")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["code"], "MISSING_FILE");
+}
+
+#[tokio::test]
+async fn test_convert_file_invalid_json() {
+    let app = create_router(&test_config());
+    let boundary = "----TestBoundary12345";
+
+    let body = multipart_body(boundary, &[("file", Some("bad.json"), b"this is not json")]);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/file")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["code"], "INVALID_JSON");
+}
+
+#[tokio::test]
+async fn test_convert_file_with_include_header() {
+    let app = create_router(&test_config());
+    let boundary = "----TestBoundary12345";
+
+    let json_str = r#"{
+        "article_id": "HDR_FILE001",
+        "title": "헤더포함 파일업로드",
+        "metadata": {
+            "author": "홍길동",
+            "department": "개발팀",
+            "created_at": "2025-01-24 AM 10:00:00"
+        },
+        "contents": [
+            { "type": "text", "value": "본문" }
+        ]
+    }"#;
+
+    let body = multipart_body(
+        boundary,
+        &[
+            ("file", Some("input.json"), json_str.as_bytes()),
+            ("include_header", None, b"true"),
+        ],
+    );
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/file")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let disposition = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(disposition.contains("HDR_FILE001.hwpx"));
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(&body[0..2], &[0x50, 0x4B]);
 }
 
 /// 유효한 라이선스 → convert 정상 동작
