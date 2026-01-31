@@ -18,8 +18,8 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use handlers::{
-    ConvertRequest, ErrorDetail, ErrorItem, ErrorResponse, HealthResponse, ValidateResponse,
-    WorkerInfo,
+    ConvertFileRequest, ConvertRequest, ErrorDetail, ErrorItem, ErrorResponse, HealthResponse,
+    ValidateResponse, WorkerInfo,
 };
 use jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
 
@@ -43,6 +43,7 @@ use jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
     ),
     components(schemas(
         ConvertRequest,
+        ConvertFileRequest,
         ErrorResponse,
         ErrorDetail,
         ErrorItem,

@@ -208,6 +208,17 @@ pub async fn convert(
     Ok((headers, bytes))
 }
 
+/// 파일 업로드 변환 요청 (OpenAPI 문서용)
+#[derive(ToSchema)]
+pub struct ConvertFileRequest {
+    /// JSON 파일
+    #[schema(value_type = String, format = Binary)]
+    pub file: String,
+    /// 메타데이터를 본문 상단에 삽입할지 여부
+    #[schema(default = false)]
+    pub include_header: Option<bool>,
+}
+
 /// JSON 파일을 업로드하여 HWPX 문서로 변환 (동기)
 ///
 /// multipart/form-data로 JSON 파일을 업로드하면 HWPX 바이너리를 즉시 반환합니다.
@@ -215,7 +226,7 @@ pub async fn convert(
 #[utoipa::path(
     post,
     path = "/api/v1/convert/file",
-    request_body(content_type = "multipart/form-data"),
+    request_body(content = ConvertFileRequest, content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "변환 성공 (HWPX 바이너리)", content_type = "application/vnd.hancom.hwpx"),
         (status = 400, description = "잘못된 입력", body = ErrorResponse),
