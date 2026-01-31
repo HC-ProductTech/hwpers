@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
+use axum::body::{Body, to_bytes};
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
@@ -198,6 +199,46 @@ async fn license_check_middleware(
     next.run(request).await
 }
 
+/// Swagger UI에 주입할 커스텀 CSS
+///
+/// - `.servers`, `.servers-title`: 글로벌/operation-level Servers 드롭다운 숨김
+/// - `.operation-servers`: operation 서버 옵션 숨김
+/// - `.schemes-server-container`: 스킴/서버 컨테이너 숨김
+const SWAGGER_CUSTOM_CSS: &str = r#"<style>
+.servers,
+.servers-title,
+.operation-servers,
+.schemes-server-container { display: none !important; }
+</style>"#;
+
+/// Swagger UI HTML 응답에 커스텀 CSS를 주입하는 미들웨어
+async fn swagger_css_middleware(request: Request<Body>, next: Next) -> Response {
+    let path = request.uri().path().to_string();
+    let response = next.run(request).await;
+
+    // swagger-ui 루트 경로(index.html)만 대상
+    let is_swagger_html = (path == "/swagger-ui"
+        || path == "/swagger-ui/"
+        || path == "/swagger-ui/index.html")
+        && response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|ct| ct.contains("text/html"));
+
+    if !is_swagger_html {
+        return response;
+    }
+
+    let (parts, body) = response.into_parts();
+    let Ok(bytes) = to_bytes(body, 1024 * 1024).await else {
+        return Response::from_parts(parts, Body::empty());
+    };
+    let html = String::from_utf8_lossy(&bytes);
+    let modified = html.replace("</head>", &format!("{SWAGGER_CUSTOM_CSS}\n</head>"));
+    Response::from_parts(parts, Body::from(modified.to_string()))
+}
+
 /// 주어진 AppState로 Router 생성
 pub fn create_router_with_state(state: Arc<AppState>, max_request_size: usize) -> Router {
     let mut openapi = ApiDoc::openapi();
@@ -230,6 +271,7 @@ pub fn create_router_with_state(state: Arc<AppState>, max_request_size: usize) -
             state.clone(),
             license_check_middleware,
         ))
+        .layer(axum::middleware::from_fn(swagger_css_middleware))
         .layer(DefaultBodyLimit::max(max_request_size))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
