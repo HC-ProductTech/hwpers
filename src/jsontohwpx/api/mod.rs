@@ -27,9 +27,9 @@ use jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
 #[derive(OpenApi)]
 #[openapi(
     info(
-        title = "jsontohwpx API",
+        title = "HWPX-Converter API",
         version = "0.5.0",
-        description = "JSON API 응답을 HWPX(한글 문서) 파일로 변환하는 REST API"
+        description = "JSON 데이터를 HWPX(한글 문서) 파일로 변환하는 REST API"
     ),
     paths(
         handlers::convert,
