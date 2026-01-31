@@ -13,7 +13,7 @@ impl PreviewText {
             });
         }
 
-        if !data.len().is_multiple_of(2) {
+        if data.len() % 2 != 0 {
             return Err(HwpError::ParseError(
                 "PreviewText data length must be even (UTF-16LE)".to_string(),
             ));
