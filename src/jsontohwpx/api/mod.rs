@@ -15,7 +15,7 @@ use chrono::NaiveDate;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa_swagger_ui::{Config, SwaggerUi};
 
 use handlers::{
     ConvertFileRequest, ConvertRequest, ErrorDetail, ErrorItem, ErrorResponse, HealthResponse,
@@ -29,8 +29,7 @@ use jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
     info(
         title = "jsontohwpx API",
         version = "0.5.0",
-        description = "JSON API 응답을 HWPX(한글 문서) 파일로 변환하는 REST API",
-        license(name = "MIT OR Apache-2.0")
+        description = "JSON API 응답을 HWPX(한글 문서) 파일로 변환하는 REST API"
     ),
     paths(
         handlers::convert,
@@ -201,8 +200,16 @@ async fn license_check_middleware(
 
 /// 주어진 AppState로 Router 생성
 pub fn create_router_with_state(state: Arc<AppState>, max_request_size: usize) -> Router {
+    let mut openapi = ApiDoc::openapi();
+    // utoipa가 Cargo.toml의 license를 자동 삽입하므로 런타임에 제거
+    openapi.info.license = None;
+
     Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .merge(
+            SwaggerUi::new("/swagger-ui")
+                .url("/api-docs/openapi.json", openapi)
+                .config(Config::default().use_base_layout()),
+        )
         .route("/api/v1/convert", axum::routing::post(handlers::convert))
         .route(
             "/api/v1/convert/file",
