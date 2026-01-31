@@ -6,12 +6,13 @@ use tokio::sync::mpsc;
 
 use super::jobs::JobStore;
 use crate::jsontohwpx;
-use crate::jsontohwpx::ApiResponse;
+use crate::jsontohwpx::{ArticleDocument, ConvertOptions};
 
 /// 큐에 전달되는 변환 작업
 pub struct ConvertJob {
     pub job_id: String,
-    pub input: ApiResponse,
+    pub input: ArticleDocument,
+    pub options: ConvertOptions,
     pub base_path: PathBuf,
     pub output_dir: PathBuf,
 }
@@ -96,18 +97,19 @@ async fn process_job(store: &JobStore, job: ConvertJob, worker_id: u64) {
 
     // 변환 실행 (blocking 작업이므로 spawn_blocking 사용)
     let input = job.input;
+    let options = job.options;
     let base_path = job.base_path;
     let output_dir = job.output_dir;
     let jid = job_id.clone();
 
     let result = tokio::task::spawn_blocking(move || {
-        let atcl_id = input.data.article.atcl_id.trim().to_string();
-        match jsontohwpx::convert(&input, &base_path) {
+        let article_id = input.article_id.trim().to_string();
+        match jsontohwpx::convert(&input, &options, &base_path) {
             Ok(bytes) => {
                 let file_path = output_dir.join(format!("{}.hwpx", jid));
                 std::fs::create_dir_all(&output_dir).ok();
                 match std::fs::write(&file_path, bytes) {
-                    Ok(()) => Ok((file_path, atcl_id)),
+                    Ok(()) => Ok((file_path, article_id)),
                     Err(e) => Err(format!("파일 저장 실패: {}", e)),
                 }
             }
@@ -117,8 +119,8 @@ async fn process_job(store: &JobStore, job: ConvertJob, worker_id: u64) {
     .await;
 
     match result {
-        Ok(Ok((file_path, atcl_id))) => {
-            store.set_completed(&job_id, file_path, atcl_id).await;
+        Ok(Ok((file_path, article_id))) => {
+            store.set_completed(&job_id, file_path, article_id).await;
             tracing::info!(worker_id, job_id = %job_id, "작업 완료");
         }
         Ok(Err(e)) => {

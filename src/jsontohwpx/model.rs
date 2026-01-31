@@ -2,70 +2,80 @@ use serde::Deserialize;
 
 use super::error::{JsonToHwpxError, Result};
 
-/// API 응답 최상위 구조
+/// 게시판 게시글 문서 구조 (JSON 입력 최상위)
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiResponse {
-    pub response_code: String,
-    pub response_text: Option<String>,
+pub struct ArticleDocument {
+    /// 스키마 버전 (예: "1.0")
+    pub schema_version: Option<String>,
+    /// 게시글 고유 ID (필수)
+    pub article_id: String,
+    /// 게시글 제목
+    pub title: Option<String>,
+    /// 메타데이터 (작성자, 날짜 등)
     #[serde(default)]
-    pub options: Options,
-    pub data: Data,
+    pub metadata: Option<Metadata>,
+    /// 본문 콘텐츠 배열
+    #[serde(default)]
+    pub contents: Vec<Content>,
+    /// 원본 HTML (무시)
+    pub content_html: Option<String>,
+    /// 첨부파일 목록 (무시)
+    pub attachments: Option<Vec<serde_json::Value>>,
+    /// 첨부파일 개수 (무시)
+    pub attachment_count: Option<u64>,
+    /// 첨부파일 총 용량 (무시)
+    pub total_attachment_size: Option<u64>,
 }
 
-impl ApiResponse {
+impl ArticleDocument {
     /// 입력 데이터 검증
     ///
-    /// - responseCode == "0" 확인
-    /// - atclId 비어있지 않음 확인
+    /// - article_id 비어있지 않음 확인
     pub fn validate(&self) -> Result<()> {
-        if self.response_code != "0" {
-            return Err(JsonToHwpxError::Input(format!(
-                "responseCode가 '0'이 아닙니다: code='{}', text='{}'",
-                self.response_code,
-                self.response_text.as_deref().unwrap_or("")
-            )));
-        }
-
-        if self.data.article.atcl_id.trim().is_empty() {
-            return Err(JsonToHwpxError::Input("atclId가 비어있습니다".to_string()));
+        if self.article_id.trim().is_empty() {
+            return Err(JsonToHwpxError::Input(
+                "article_id가 비어있습니다".to_string(),
+            ));
         }
 
         Ok(())
     }
 }
 
-/// 변환 옵션
+/// 메타데이터 구조
 #[derive(Debug, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Options {
-    #[serde(default)]
+pub struct Metadata {
+    /// 작성자
+    pub author: Option<String>,
+    /// 작성일시 (ISO 8601)
+    pub created_at: Option<String>,
+    /// 수정일시 (ISO 8601)
+    pub updated_at: Option<String>,
+    /// 작성 부서
+    pub department: Option<String>,
+    /// 게시판 ID
+    pub board_id: Option<String>,
+    /// 게시판 이름
+    pub board_name: Option<String>,
+    /// 게시판 폴더 ID
+    pub folder_id: Option<String>,
+    /// 게시 만료일
+    pub expiry: Option<String>,
+    /// 조회수
+    pub views: Option<u64>,
+    /// 좋아요 수
+    pub likes: Option<u64>,
+    /// 댓글 수
+    pub comments: Option<u64>,
+}
+
+/// 변환 옵션 (CLI/API 파라미터로 전달)
+#[derive(Debug, Clone, Default)]
+pub struct ConvertOptions {
+    /// 헤더 포함 여부
     pub include_header: bool,
-    #[serde(default)]
+    /// 포함할 헤더 필드 목록
     pub header_fields: Vec<String>,
-}
-
-/// data 필드
-#[derive(Debug, Deserialize)]
-pub struct Data {
-    pub article: Article,
-}
-
-/// article 구조 (메타데이터 + 본문)
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Article {
-    pub atcl_id: String,
-    #[serde(default)]
-    pub subject: String,
-    #[serde(default)]
-    pub contents: Vec<Content>,
-    #[serde(default)]
-    pub reg_dt: Option<String>,
-    #[serde(default)]
-    pub reg_emp_name: Option<String>,
-    #[serde(default)]
-    pub reg_dept_name: Option<String>,
 }
 
 /// contents 배열의 각 요소
@@ -94,67 +104,54 @@ mod tests {
     #[test]
     fn test_parse_simple_text() {
         let json = r#"{
-            "responseCode": "0",
-            "responseText": "SUCCESS",
-            "data": {
-                "article": {
-                    "atclId": "TEST001",
-                    "subject": "테스트",
-                    "contents": [
-                        { "type": "text", "value": "안녕하세요" }
-                    ]
-                }
-            }
+            "schema_version": "1.0",
+            "article_id": "TEST001",
+            "title": "테스트",
+            "contents": [
+                { "type": "text", "value": "안녕하세요" }
+            ]
         }"#;
 
-        let response: ApiResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.response_code, "0");
-        assert_eq!(response.data.article.atcl_id, "TEST001");
-        assert_eq!(response.data.article.contents.len(), 1);
+        let doc: ArticleDocument = serde_json::from_str(json).unwrap();
+        assert_eq!(doc.article_id, "TEST001");
+        assert_eq!(doc.title.as_deref(), Some("테스트"));
+        assert_eq!(doc.contents.len(), 1);
     }
 
     #[test]
     fn test_validate_success() {
         let json = r#"{
-            "responseCode": "0",
-            "responseText": "SUCCESS",
-            "data": { "article": { "atclId": "T1", "subject": "S" } }
+            "article_id": "T1",
+            "title": "S"
         }"#;
 
-        let response: ApiResponse = serde_json::from_str(json).unwrap();
-        assert!(response.validate().is_ok());
+        let doc: ArticleDocument = serde_json::from_str(json).unwrap();
+        assert!(doc.validate().is_ok());
     }
 
     #[test]
-    fn test_validate_failure() {
+    fn test_validate_empty_article_id() {
         let json = r#"{
-            "responseCode": "999",
-            "responseText": "FAIL",
-            "data": { "article": { "atclId": "T1", "subject": "S" } }
+            "article_id": "  ",
+            "title": "S"
         }"#;
 
-        let response: ApiResponse = serde_json::from_str(json).unwrap();
-        let err = response.validate().unwrap_err();
+        let doc: ArticleDocument = serde_json::from_str(json).unwrap();
+        let err = doc.validate().unwrap_err();
         assert_eq!(err.exit_code(), 1);
     }
 
     #[test]
     fn test_parse_image_url() {
         let json = r#"{
-            "responseCode": "0",
-            "data": {
-                "article": {
-                    "atclId": "T1",
-                    "subject": "S",
-                    "contents": [
-                        { "type": "image", "url": "./test.png" }
-                    ]
-                }
-            }
+            "article_id": "T1",
+            "contents": [
+                { "type": "image", "url": "./test.png" }
+            ]
         }"#;
 
-        let response: ApiResponse = serde_json::from_str(json).unwrap();
-        match &response.data.article.contents[0] {
+        let doc: ArticleDocument = serde_json::from_str(json).unwrap();
+        match &doc.contents[0] {
             Content::Image { url, .. } => assert_eq!(url.as_deref(), Some("./test.png")),
             _ => panic!("Expected Image content"),
         }
@@ -163,95 +160,86 @@ mod tests {
     #[test]
     fn test_parse_empty_contents() {
         let json = r#"{
-            "responseCode": "0",
-            "data": {
-                "article": {
-                    "atclId": "T1",
-                    "subject": "S",
-                    "contents": []
-                }
-            }
+            "article_id": "T1",
+            "contents": []
         }"#;
 
-        let response: ApiResponse = serde_json::from_str(json).unwrap();
-        assert!(response.data.article.contents.is_empty());
+        let doc: ArticleDocument = serde_json::from_str(json).unwrap();
+        assert!(doc.contents.is_empty());
     }
 
     #[test]
     fn test_invalid_json() {
         let json = r#"{ this is not valid json }"#;
-        let result = serde_json::from_str::<ApiResponse>(json);
+        let result = serde_json::from_str::<ArticleDocument>(json);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_unknown_content_type() {
         let json = r#"{
-            "responseCode": "0",
-            "data": {
-                "article": {
-                    "atclId": "T1",
-                    "subject": "S",
-                    "contents": [
-                        { "type": "unknown", "value": "test" }
-                    ]
-                }
-            }
+            "article_id": "T1",
+            "contents": [
+                { "type": "unknown", "value": "test" }
+            ]
         }"#;
 
-        let result = serde_json::from_str::<ApiResponse>(json);
+        let result = serde_json::from_str::<ArticleDocument>(json);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_missing_atcl_id() {
+    fn test_missing_article_id() {
         let json = r#"{
-            "responseCode": "0",
-            "data": {
-                "article": {
-                    "subject": "S",
-                    "contents": []
-                }
-            }
+            "title": "S",
+            "contents": []
         }"#;
 
-        let result = serde_json::from_str::<ApiResponse>(json);
+        let result = serde_json::from_str::<ArticleDocument>(json);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_empty_atcl_id_validation() {
+    fn test_parse_metadata() {
         let json = r#"{
-            "responseCode": "0",
-            "data": {
-                "article": {
-                    "atclId": "  ",
-                    "subject": "S",
-                    "contents": []
-                }
+            "article_id": "T1",
+            "metadata": {
+                "author": "홍길동",
+                "department": "개발팀",
+                "created_at": "2025-01-24T10:00:00+09:00"
             }
         }"#;
 
-        let response: ApiResponse = serde_json::from_str(json).unwrap();
-        let err = response.validate().unwrap_err();
-        assert_eq!(err.exit_code(), 1);
+        let doc: ArticleDocument = serde_json::from_str(json).unwrap();
+        let meta = doc.metadata.unwrap();
+        assert_eq!(meta.author.as_deref(), Some("홍길동"));
+        assert_eq!(meta.department.as_deref(), Some("개발팀"));
     }
 
     #[test]
-    fn test_parse_options() {
+    fn test_parse_with_ignored_fields() {
         let json = r#"{
-            "responseCode": "0",
-            "options": {
-                "includeHeader": true,
-                "headerFields": ["subject", "regEmpName"]
-            },
-            "data": {
-                "article": { "atclId": "T1", "subject": "S" }
-            }
+            "schema_version": "1.0",
+            "article_id": "T1",
+            "title": "S",
+            "content_html": "<p>original</p>",
+            "attachments": [{"file_id": "F1"}],
+            "attachment_count": 1,
+            "total_attachment_size": 1024,
+            "contents": []
         }"#;
 
-        let response: ApiResponse = serde_json::from_str(json).unwrap();
-        assert!(response.options.include_header);
-        assert_eq!(response.options.header_fields.len(), 2);
+        let doc: ArticleDocument = serde_json::from_str(json).unwrap();
+        assert_eq!(doc.schema_version.as_deref(), Some("1.0"));
+        assert!(doc.content_html.is_some());
+        assert!(doc.attachments.is_some());
+        assert_eq!(doc.attachment_count, Some(1));
+    }
+
+    #[test]
+    fn test_convert_options_default() {
+        let opts = ConvertOptions::default();
+        assert!(!opts.include_header);
+        assert!(opts.header_fields.is_empty());
     }
 }

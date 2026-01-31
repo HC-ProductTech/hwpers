@@ -49,16 +49,11 @@ async fn poll_job_completed(app: &Router, job_id: &str) -> serde_json::Value {
 
 fn simple_json() -> &'static str {
     r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "TEST001",
-                "subject": "테스트",
-                "contents": [
-                    { "type": "text", "value": "안녕하세요" }
-                ]
-            }
-        }
+        "article_id": "TEST001",
+        "title": "테스트",
+        "contents": [
+            { "type": "text", "value": "안녕하세요" }
+        ]
     }"#
 }
 
@@ -117,19 +112,13 @@ async fn test_convert_invalid_json() {
 }
 
 #[tokio::test]
-async fn test_convert_invalid_response_code() {
+async fn test_convert_empty_article_id() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "99",
-        "responseText": "FAIL",
-        "data": {
-            "article": {
-                "atclId": "ERR001",
-                "subject": "에러",
-                "contents": []
-            }
-        }
+        "article_id": "  ",
+        "title": "에러",
+        "contents": []
     }"#;
 
     let req = Request::builder()
@@ -152,16 +141,11 @@ async fn test_convert_empty_table_error() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "TBL_ERR",
-                "subject": "빈테이블",
-                "contents": [
-                    { "type": "table", "value": "<table></table>" }
-                ]
-            }
-        }
+        "article_id": "TBL_ERR",
+        "title": "빈테이블",
+        "contents": [
+            { "type": "table", "value": "<table></table>" }
+        ]
     }"#;
 
     let req = Request::builder()
@@ -184,18 +168,13 @@ async fn test_convert_with_table() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "TBL001",
-                "subject": "테이블문서",
-                "contents": [
-                    { "type": "text", "value": "표 앞" },
-                    { "type": "table", "value": "<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>" },
-                    { "type": "text", "value": "표 뒤" }
-                ]
-            }
-        }
+        "article_id": "TBL001",
+        "title": "테이블문서",
+        "contents": [
+            { "type": "text", "value": "표 앞" },
+            { "type": "table", "value": "<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>" },
+            { "type": "text", "value": "표 뒤" }
+        ]
     }"#;
 
     let req = Request::builder()
@@ -257,18 +236,13 @@ async fn test_validate_invalid_json() {
 }
 
 #[tokio::test]
-async fn test_validate_bad_response_code() {
+async fn test_validate_empty_article_id() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "1",
-        "data": {
-            "article": {
-                "atclId": "X",
-                "subject": "",
-                "contents": []
-            }
-        }
+        "article_id": "  ",
+        "title": "",
+        "contents": []
     }"#;
 
     let req = Request::builder()
@@ -396,20 +370,16 @@ async fn test_convert_with_include_header() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "0",
-        "options": { "includeHeader": true },
-        "data": {
-            "article": {
-                "atclId": "HDR001",
-                "subject": "헤더포함",
-                "contents": [
-                    { "type": "text", "value": "본문" }
-                ],
-                "regDt": "2025-01-24 AM 10:00:00",
-                "regEmpName": "홍길동",
-                "regDeptName": "개발팀"
-            }
-        }
+        "article_id": "HDR001",
+        "title": "헤더포함",
+        "metadata": {
+            "author": "홍길동",
+            "department": "개발팀",
+            "created_at": "2025-01-24 AM 10:00:00"
+        },
+        "contents": [
+            { "type": "text", "value": "본문" }
+        ]
     }"#;
 
     let req = Request::builder()
@@ -477,18 +447,13 @@ async fn test_convert_async_invalid_json() {
 }
 
 #[tokio::test]
-async fn test_convert_async_invalid_response_code() {
+async fn test_convert_async_empty_article_id() {
     let app = create_router(&test_config());
 
     let json_body = r#"{
-        "responseCode": "99",
-        "data": {
-            "article": {
-                "atclId": "ERR001",
-                "subject": "에러",
-                "contents": []
-            }
-        }
+        "article_id": "  ",
+        "title": "에러",
+        "contents": []
     }"#;
 
     let req = Request::builder()
@@ -590,16 +555,11 @@ async fn test_convert_async_failed_job() {
 
     // 빈 테이블로 변환 실패 유도
     let json_body = r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "FAIL001",
-                "subject": "실패테스트",
-                "contents": [
-                    { "type": "table", "value": "<table></table>" }
-                ]
-            }
-        }
+        "article_id": "FAIL001",
+        "title": "실패테스트",
+        "contents": [
+            { "type": "table", "value": "<table></table>" }
+        ]
     }"#;
 
     let req = Request::builder()

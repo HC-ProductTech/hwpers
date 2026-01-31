@@ -1,19 +1,16 @@
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "data": {
-    "article": {
-      "atclId": "BA000000000000000000104",
-      "subject": "[테스트] 복잡한 다중 머지",
-      "contents": [
-        {
-          "type": "table",
-          "value": "<table><tr><th colspan=\"5\">주간 업무 보고서</th></tr><tr><th>구분</th><th>월</th><th>화</th><th>수</th><th>목</th></tr><tr><td rowspan=\"2\">오전</td><td>회의</td><td colspan=\"2\">프로젝트A 개발</td><td>코드리뷰</td></tr><tr><td>문서작성</td><td>테스트</td><td>배포</td><td rowspan=\"2\">장기미팅</td></tr><tr><td rowspan=\"2\">오후</td><td colspan=\"2\">교육 참석</td><td>버그수정</td></tr><tr><td>자율학습</td><td>자율학습</td><td>자율학습</td><td>정리</td></tr></table>"
-        }
-      ],
-      "regDt": "2025-07-01 PM 02:00:00",
-      "regEmpName": "최개발",
-      "regDeptName": "개발1팀"
+  "schema_version": "1.0",
+  "article_id": "BA000000000000000000104",
+  "title": "[테스트] 복잡한 다중 머지",
+  "metadata": {
+    "author": "최개발",
+    "department": "개발1팀",
+    "created_at": "2025-07-01 PM 02:00:00"
+  },
+  "contents": [
+    {
+      "type": "table",
+      "value": "<table><tr><th colspan=\"5\">주간 업무 보고서</th></tr><tr><th>구분</th><th>월</th><th>화</th><th>수</th><th>목</th></tr><tr><td rowspan=\"2\">오전</td><td>회의</td><td colspan=\"2\">프로젝트A 개발</td><td>코드리뷰</td></tr><tr><td>문서작성</td><td>테스트</td><td>배포</td><td rowspan=\"2\">장기미팅</td></tr><tr><td rowspan=\"2\">오후</td><td colspan=\"2\">교육 참석</td><td>버그수정</td></tr><tr><td>자율학습</td><td>자율학습</td><td>자율학습</td><td>정리</td></tr></table>"
     }
-  }
+  ]
 }

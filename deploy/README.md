@@ -90,24 +90,18 @@ JSON을 보내면 즉시 HWPX 파일을 응답으로 받습니다.
 curl -X POST http://localhost:9040/api/v1/convert \
   -H "Content-Type: application/json" \
   -d '{
-    "responseCode": "0",
-    "data": {
-      "article": {
-        "atclId": "DOC001",
-        "subject": "테스트 문서",
-        "contents": [
-          { "type": "text", "value": "안녕하세요.\n변환 테스트입니다." },
-          { "type": "table", "value": "<table><tr><th>이름</th><th>부서</th></tr><tr><td>홍길동</td><td>개발팀</td></tr></table>" }
-        ],
-        "regEmpName": "홍길동",
-        "regDeptName": "개발팀",
-        "regDt": "2025-01-30 10:00:00"
-      }
+    "schema_version": "1.0",
+    "article_id": "DOC001",
+    "title": "테스트 문서",
+    "metadata": {
+      "author": "홍길동",
+      "department": "개발팀",
+      "created_at": "2025-01-30T10:00:00+09:00"
     },
-    "options": {
-      "includeHeader": true,
-      "headerFields": ["subject", "regEmpName", "regDeptName", "regDt"]
-    }
+    "contents": [
+      { "type": "text", "value": "안녕하세요.\n변환 테스트입니다." },
+      { "type": "table", "value": "<table><tr><th>이름</th><th>부서</th></tr><tr><td>홍길동</td><td>개발팀</td></tr></table>" }
+    ]
   }' \
   --output DOC001.hwpx
 
@@ -124,16 +118,11 @@ echo "생성됨: DOC001.hwpx"
 curl -X POST http://localhost:9040/api/v1/convert/async \
   -H "Content-Type: application/json" \
   -d '{
-    "responseCode": "0",
-    "data": {
-      "article": {
-        "atclId": "DOC002",
-        "subject": "대용량 문서",
-        "contents": [
-          { "type": "text", "value": "내용..." }
-        ]
-      }
-    }
+    "article_id": "DOC002",
+    "title": "대용량 문서",
+    "contents": [
+      { "type": "text", "value": "내용..." }
+    ]
   }'
 ```
 
@@ -178,14 +167,9 @@ curl http://localhost:9040/api/v1/jobs/{job_id}/download --output result.hwpx
 curl -X POST http://localhost:9040/api/v1/validate \
   -H "Content-Type: application/json" \
   -d '{
-    "responseCode": "0",
-    "data": {
-      "article": {
-        "atclId": "DOC003",
-        "subject": "검증 테스트",
-        "contents": []
-      }
-    }
+    "article_id": "DOC003",
+    "title": "검증 테스트",
+    "contents": []
   }'
 ```
 
@@ -200,27 +184,22 @@ curl -X POST http://localhost:9040/api/v1/validate \
 
 ```json
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "options": {
-    "includeHeader": true,
-    "headerFields": ["subject", "regEmpName", "regDeptName", "regDt"]
+  "schema_version": "1.0",
+  "article_id": "문서ID (필수, 출력 파일명으로 사용)",
+  "title": "문서 제목",
+  "metadata": {
+    "author": "작성자",
+    "department": "부서",
+    "created_at": "2025-01-30T10:00:00+09:00",
+    "board_name": "게시판명",
+    "expiry": "보존기간"
   },
-  "data": {
-    "article": {
-      "atclId": "문서ID (필수, 출력 파일명으로 사용)",
-      "subject": "문서 제목",
-      "contents": [
-        { "type": "text", "value": "텍스트 (\\n으로 줄바꿈)" },
-        { "type": "table", "value": "<table>HTML 테이블</table>" },
-        { "type": "image", "url": "https://example.com/img.png" },
-        { "type": "image", "base64": "iVBOR...", "format": "png" }
-      ],
-      "regDt": "작성일시",
-      "regEmpName": "작성자",
-      "regDeptName": "부서"
-    }
-  }
+  "contents": [
+    { "type": "text", "value": "텍스트 (\\n으로 줄바꿈)" },
+    { "type": "table", "value": "<table>HTML 테이블</table>" },
+    { "type": "image", "url": "https://example.com/img.png" },
+    { "type": "image", "base64": "iVBOR...", "format": "png" }
+  ]
 }
 ```
 
@@ -228,12 +207,11 @@ curl -X POST http://localhost:9040/api/v1/validate \
 
 | 필드 | 필수 | 설명 |
 |------|------|------|
-| `responseCode` | O | `"0"`이어야 정상 처리 |
-| `data.article.atclId` | O | 문서 고유 ID |
-| `data.article.subject` | - | 문서 제목 |
-| `data.article.contents` | - | 본문 콘텐츠 배열 |
-| `options.includeHeader` | - | `true`면 메타데이터를 문서 상단에 삽입 |
-| `options.headerFields` | - | 포함할 메타데이터 필드 목록 |
+| `article_id` | O | 문서 고유 ID (비어있으면 에러) |
+| `title` | - | 문서 제목 |
+| `metadata` | - | 메타데이터 객체 (author, department 등) |
+| `contents` | - | 본문 콘텐츠 배열 |
+| `schema_version` | - | 스키마 버전 (선택) |
 
 ### 콘텐츠 타입
 
@@ -265,8 +243,7 @@ PNG, JPEG, GIF, BMP, WebP, AVIF
 | 코드 | HTTP | 설명 |
 |------|------|------|
 | `INVALID_JSON` | 400 | JSON 파싱 실패 |
-| `INVALID_RESPONSE_CODE` | 400 | responseCode가 "0"이 아님 |
-| `MISSING_DATA` | 400 | data 또는 article 누락 |
+| `INPUT_ERROR` | 400 | 입력 데이터 검증 실패 (article_id 누락 등) |
 | `CONVERSION_ERROR` | 500 | 변환 중 오류 |
 
 ---

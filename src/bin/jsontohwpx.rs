@@ -4,15 +4,15 @@ use std::process;
 
 use clap::Parser;
 
-use hwpers::jsontohwpx::{self, ApiResponse, JsonToHwpxError};
+use hwpers::jsontohwpx::{self, ArticleDocument, ConvertOptions, JsonToHwpxError};
 
 #[derive(Parser)]
-#[command(name = "jsontohwpx", about = "JSON API 응답을 HWPX 문서로 변환")]
+#[command(name = "jsontohwpx", about = "JSON 문서를 HWPX 문서로 변환")]
 struct Cli {
     /// 입력 JSON 파일 경로 ('-'이면 stdin에서 읽기)
     input: String,
 
-    /// 출력 HWPX 파일 경로 (미지정 시 {atclId}.hwpx)
+    /// 출력 HWPX 파일 경로 (미지정 시 {article_id}.hwpx)
     #[arg(short, long)]
     output: Option<PathBuf>,
 
@@ -28,9 +28,13 @@ struct Cli {
     #[arg(long)]
     validate: bool,
 
-    /// 헤더 포함 강제 (JSON의 includeHeader 무시)
+    /// 헤더 포함
     #[arg(long)]
     include_header: bool,
+
+    /// 포함할 헤더 필드 (쉼표 구분)
+    #[arg(long, value_delimiter = ',')]
+    header_fields: Option<Vec<String>>,
 }
 
 fn main() {
@@ -59,35 +63,35 @@ fn run(cli: &Cli) -> Result<(), JsonToHwpxError> {
     log_progress(1, total_steps, "JSON 파싱 중...");
     let json_str = read_input(&cli.input)?;
 
-    let mut input: ApiResponse = serde_json::from_str(&json_str)
+    let input: ArticleDocument = serde_json::from_str(&json_str)
         .map_err(|e| JsonToHwpxError::Input(format!("JSON 파싱 실패: {}", e)))?;
 
-    // --include-header 플래그 적용
-    if cli.include_header {
-        input.options.include_header = true;
-    }
+    // 변환 옵션 구성
+    let options = ConvertOptions {
+        include_header: cli.include_header,
+        header_fields: cli.header_fields.clone().unwrap_or_default(),
+    };
 
     // Step 2: 검증
     if cli.validate {
         log_progress(2, total_steps, "검증 중...");
         input.validate()?;
         eprintln!(
-            "검증 성공: responseCode={}, atclId={}, contents={}개",
-            input.response_code,
-            input.data.article.atcl_id,
-            input.data.article.contents.len()
+            "검증 성공: article_id={}, contents={}개",
+            input.article_id,
+            input.contents.len()
         );
         return Ok(());
     }
 
     // Step 2: 변환
-    let content_count = input.data.article.contents.len();
+    let content_count = input.contents.len();
     log_progress(
         2,
         total_steps,
         &format!("변환 중... ({}개 콘텐츠)", content_count),
     );
-    let bytes = jsontohwpx::convert(&input, &cli.base_path)?;
+    let bytes = jsontohwpx::convert(&input, &options, &cli.base_path)?;
 
     // Step 3: 파일 저장
     let output_path = resolve_output_path(cli, &input)?;
@@ -118,13 +122,16 @@ fn read_input(input: &str) -> Result<String, JsonToHwpxError> {
     }
 }
 
-/// 출력 경로 결정: -o 지정 시 해당 경로, 미지정 시 {atclId}.hwpx
-fn resolve_output_path(cli: &Cli, input: &ApiResponse) -> Result<PathBuf, JsonToHwpxError> {
+/// 출력 경로 결정: -o 지정 시 해당 경로, 미지정 시 {article_id}.hwpx
+fn resolve_output_path(
+    cli: &Cli,
+    input: &ArticleDocument,
+) -> Result<PathBuf, JsonToHwpxError> {
     if let Some(ref output) = cli.output {
         Ok(output.clone())
     } else {
-        let atcl_id = &input.data.article.atcl_id;
-        let filename = format!("{}.hwpx", atcl_id.trim());
+        let article_id = &input.article_id;
+        let filename = format!("{}.hwpx", article_id.trim());
         Ok(PathBuf::from(filename))
     }
 }

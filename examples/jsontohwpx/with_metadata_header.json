@@ -1,23 +1,16 @@
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "options": {
-    "includeHeader": true,
-    "headerFields": ["subject", "regEmpName", "regDeptName", "regDt"]
+  "schema_version": "1.0",
+  "article_id": "BA000000000000000000007",
+  "title": "[공지] 사내 시스템 점검 안내",
+  "metadata": {
+    "author": "김관리",
+    "department": "IT인프라팀",
+    "created_at": "2025-01-24 PM 05:00:00"
   },
-  "data": {
-    "article": {
-      "atclId": "BA000000000000000000007",
-      "subject": "[공지] 사내 시스템 점검 안내",
-      "contents": [
-        {
-          "type": "text",
-          "value": "안녕하세요.\n\n아래와 같이 사내 시스템 점검을 안내드립니다.\n\n- 일시: 2025년 2월 1일(토) 00:00 ~ 06:00\n- 대상: 그룹웨어, 메일 시스템\n- 영향: 해당 시간 동안 서비스 이용 불가\n\n업무에 참고 부탁드립니다.\n감사합니다."
-        }
-      ],
-      "regDt": "2025-01-24 PM 05:00:00",
-      "regEmpName": "김관리",
-      "regDeptName": "IT인프라팀"
+  "contents": [
+    {
+      "type": "text",
+      "value": "안녕하세요.\n\n아래와 같이 사내 시스템 점검을 안내드립니다.\n\n- 일시: 2025년 2월 1일(토) 00:00 ~ 06:00\n- 대상: 그룹웨어, 메일 시스템\n- 영향: 해당 시간 동안 서비스 이용 불가\n\n업무에 참고 부탁드립니다.\n감사합니다."
     }
-  }
+  ]
 }

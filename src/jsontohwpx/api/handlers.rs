@@ -11,33 +11,33 @@ use uuid::Uuid;
 use super::jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
 use super::queue::ConvertJob;
 use super::AppState;
-use crate::jsontohwpx::{self, ApiResponse, JsonToHwpxError};
+use crate::jsontohwpx::{self, ArticleDocument, ConvertOptions, JsonToHwpxError};
 
 // --- 요청/응답 스키마 ---
 
 /// 변환 요청 바디 (OpenAPI 문서용)
 #[derive(Deserialize, ToSchema)]
 #[schema(example = json!({
-    "responseCode": "0",
-    "data": {
-        "article": {
-            "atclId": "DOC001",
-            "subject": "문서 제목",
-            "contents": [
-                { "type": "text", "value": "본문 텍스트" }
-            ]
-        }
-    }
+    "article_id": "DOC001",
+    "title": "문서 제목",
+    "metadata": {
+        "author": "홍길동",
+        "department": "개발팀",
+        "created_at": "2025-01-30T10:00:00+09:00"
+    },
+    "contents": [
+        { "type": "text", "value": "본문 텍스트" }
+    ]
 }))]
 pub struct ConvertRequest {
-    /// 응답 코드 ("0"이면 정상)
-    #[serde(rename = "responseCode")]
-    pub response_code: String,
-    /// 옵션
-    #[serde(default)]
-    pub options: Option<serde_json::Value>,
-    /// 데이터
-    pub data: serde_json::Value,
+    /// 게시글 고유 ID
+    pub article_id: String,
+    /// 제목
+    pub title: Option<String>,
+    /// 메타데이터
+    pub metadata: Option<serde_json::Value>,
+    /// 본문 콘텐츠
+    pub contents: Option<Vec<serde_json::Value>>,
 }
 
 /// 에러 응답 구조
@@ -121,7 +121,7 @@ pub struct WorkerInfo {
 
 /// JSON을 HWPX 문서로 변환 (동기)
 ///
-/// JSON API 응답을 받아 HWPX(한글 문서) 바이너리 파일로 변환하여 즉시 반환합니다.
+/// JSON 문서를 받아 HWPX(한글 문서) 바이너리 파일로 변환하여 즉시 반환합니다.
 #[utoipa::path(
     post,
     path = "/api/v1/convert",
@@ -137,7 +137,7 @@ pub async fn convert(
     State(state): State<Arc<AppState>>,
     body: String,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
-    let input: ApiResponse = serde_json::from_str(&body).map_err(|e| {
+    let input: ArticleDocument = serde_json::from_str(&body).map_err(|e| {
         let resp = ErrorResponse {
             error: ErrorDetail {
                 code: "INVALID_JSON".to_string(),
@@ -159,12 +159,13 @@ pub async fn convert(
         return Err((StatusCode::BAD_REQUEST, Json(resp)));
     }
 
-    let atcl_id = input.data.article.atcl_id.trim().to_string();
+    let article_id = input.article_id.trim().to_string();
     let base_path = state.base_path.clone();
+    let options = ConvertOptions::default();
 
     // spawn_blocking으로 감싸서 blocking reqwest와 tokio 런타임 충돌 방지
     let convert_result = tokio::task::spawn_blocking(move || {
-        jsontohwpx::convert(&input, &base_path)
+        jsontohwpx::convert(&input, &options, &base_path)
     })
     .await
     .map_err(|e| {
@@ -193,7 +194,7 @@ pub async fn convert(
         (status, Json(resp))
     })?;
 
-    let filename = format!("{}.hwpx", atcl_id);
+    let filename = format!("{}.hwpx", article_id);
     let headers = [
         (
             header::CONTENT_TYPE,
@@ -227,7 +228,7 @@ pub async fn convert_async(
     State(state): State<Arc<AppState>>,
     body: String,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    let input: ApiResponse = serde_json::from_str(&body).map_err(|e| {
+    let input: ArticleDocument = serde_json::from_str(&body).map_err(|e| {
         let resp = ErrorResponse {
             error: ErrorDetail {
                 code: "INVALID_JSON".to_string(),
@@ -255,6 +256,7 @@ pub async fn convert_async(
     let convert_job = ConvertJob {
         job_id: job_id.clone(),
         input,
+        options: ConvertOptions::default(),
         base_path: state.base_path.clone(),
         output_dir: state.output_dir.clone(),
     };
@@ -416,7 +418,7 @@ pub async fn download_job(
     tag = "검증"
 )]
 pub async fn validate(body: String) -> impl IntoResponse {
-    let input: ApiResponse = match serde_json::from_str(&body) {
+    let input: ArticleDocument = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => {
             let resp = ValidateResponse {

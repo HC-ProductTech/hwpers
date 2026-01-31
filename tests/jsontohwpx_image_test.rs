@@ -1,10 +1,14 @@
 use std::path::PathBuf;
 
-use hwpers::jsontohwpx::{self, ApiResponse};
+use hwpers::jsontohwpx::{self, ArticleDocument, ConvertOptions};
 use hwpers::HwpxReader;
 
 fn base_path() -> PathBuf {
     PathBuf::from("examples/jsontohwpx")
+}
+
+fn default_options() -> ConvertOptions {
+    ConvertOptions::default()
 }
 
 fn verify_hwpx_bytes(bytes: &[u8]) {
@@ -20,9 +24,9 @@ fn convert_example_file(filename: &str) {
     let path = base_path().join(filename);
     let json = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("예제 파일 읽기 실패: {} ({})", path.display(), e));
-    let input: ApiResponse = serde_json::from_str(&json)
+    let input: ArticleDocument = serde_json::from_str(&json)
         .unwrap_or_else(|e| panic!("JSON 파싱 실패: {} ({})", filename, e));
-    let bytes = jsontohwpx::convert(&input, &base_path())
+    let bytes = jsontohwpx::convert(&input, &default_options(), &base_path())
         .unwrap_or_else(|e| panic!("변환 실패: {} ({})", filename, e));
     verify_hwpx_bytes(&bytes);
 }
@@ -61,8 +65,8 @@ fn test_image_avif() {
 fn test_with_image_text_mixed() {
     let path = base_path().join("with_image.json");
     let json = std::fs::read_to_string(&path).unwrap();
-    let input: ApiResponse = serde_json::from_str(&json).unwrap();
-    let bytes = jsontohwpx::convert(&input, &base_path()).unwrap();
+    let input: ArticleDocument = serde_json::from_str(&json).unwrap();
+    let bytes = jsontohwpx::convert(&input, &default_options(), &base_path()).unwrap();
     verify_hwpx_bytes(&bytes);
 
     let doc = HwpxReader::from_bytes(&bytes).unwrap();
@@ -84,39 +88,29 @@ fn test_image_multi_format() {
 #[test]
 fn test_image_download_failure() {
     let json = r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "IMG_ERR001",
-                "subject": "이미지 에러",
-                "contents": [
-                    { "type": "image", "url": "http://invalid.example.test/nonexistent.png" }
-                ]
-            }
-        }
+        "article_id": "IMG_ERR001",
+        "title": "이미지 에러",
+        "contents": [
+            { "type": "image", "url": "http://invalid.example.test/nonexistent.png" }
+        ]
     }"#;
 
-    let input: ApiResponse = serde_json::from_str(json).unwrap();
-    let result = jsontohwpx::convert(&input, &base_path());
+    let input: ArticleDocument = serde_json::from_str(json).unwrap();
+    let result = jsontohwpx::convert(&input, &default_options(), &base_path());
     assert!(result.is_err(), "존재하지 않는 URL이면 에러를 반환해야 함");
 }
 
 #[test]
 fn test_image_local_file_not_found() {
     let json = r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "IMG_ERR002",
-                "subject": "이미지 에러",
-                "contents": [
-                    { "type": "image", "url": "./nonexistent_image.png" }
-                ]
-            }
-        }
+        "article_id": "IMG_ERR002",
+        "title": "이미지 에러",
+        "contents": [
+            { "type": "image", "url": "./nonexistent_image.png" }
+        ]
     }"#;
 
-    let input: ApiResponse = serde_json::from_str(json).unwrap();
-    let result = jsontohwpx::convert(&input, &base_path());
+    let input: ArticleDocument = serde_json::from_str(json).unwrap();
+    let result = jsontohwpx::convert(&input, &default_options(), &base_path());
     assert!(result.is_err(), "존재하지 않는 파일이면 에러를 반환해야 함");
 }

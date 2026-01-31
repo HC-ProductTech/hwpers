@@ -1,27 +1,24 @@
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "data": {
-    "article": {
-      "atclId": "BA000000000000000000002",
-      "subject": "[공지] 이미지 포함 문서 테스트",
-      "contents": [
-        {
-          "type": "text",
-          "value": "안녕하세요. 개발팀 홍길동입니다.\n\n아래에 이미지가 첨부되어 있습니다."
-        },
-        {
-          "type": "image",
-          "url": "./test_img.png"
-        },
-        {
-          "type": "text",
-          "value": "위 이미지를 참고해주세요.\n감사합니다."
-        }
-      ],
-      "regDt": "2025-01-24 PM 02:30:00",
-      "regEmpName": "홍길동",
-      "regDeptName": "개발팀"
+  "schema_version": "1.0",
+  "article_id": "BA000000000000000000002",
+  "title": "[공지] 이미지 포함 문서 테스트",
+  "metadata": {
+    "author": "홍길동",
+    "department": "개발팀",
+    "created_at": "2025-01-24 PM 02:30:00"
+  },
+  "contents": [
+    {
+      "type": "text",
+      "value": "안녕하세요. 개발팀 홍길동입니다.\n\n아래에 이미지가 첨부되어 있습니다."
+    },
+    {
+      "type": "image",
+      "url": "./test_img.png"
+    },
+    {
+      "type": "text",
+      "value": "위 이미지를 참고해주세요.\n감사합니다."
     }
-  }
+  ]
 }

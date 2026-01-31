@@ -51,12 +51,12 @@ fn test_cli_auto_output_filename() {
         .unwrap();
 
     assert!(status.success());
-    // simple_text.json의 atclId를 확인하여 자동 파일명 검증
+    // simple_text.json의 article_id를 확인하여 자동 파일명 검증
     let json = std::fs::read_to_string(simple_json()).unwrap();
-    let input: hwpers::jsontohwpx::ApiResponse = serde_json::from_str(&json).unwrap();
+    let input: hwpers::jsontohwpx::ArticleDocument = serde_json::from_str(&json).unwrap();
     let expected_file = tmp
         .path()
-        .join(format!("{}.hwpx", input.data.article.atcl_id));
+        .join(format!("{}.hwpx", input.article_id));
     assert!(
         expected_file.exists(),
         "자동 생성된 파일 없음: {}",
@@ -85,7 +85,7 @@ fn test_cli_validate_failure() {
     let bad_json = tmp.path().join("bad.json");
     std::fs::write(
         &bad_json,
-        r#"{"responseCode":"999","data":{"article":{"atclId":"T1","subject":"S"}}}"#,
+        r#"{"article_id":"  ","title":"S"}"#,
     )
     .unwrap();
 
@@ -96,7 +96,6 @@ fn test_cli_validate_failure() {
         .unwrap();
 
     assert!(!output.status.success());
-    // exit code 1 (Input error)
     assert_eq!(output.status.code(), Some(1));
 }
 
@@ -116,7 +115,6 @@ fn test_cli_include_header() {
         .unwrap();
 
     assert!(status.success());
-    // 헤더가 포함된 HWPX 생성 확인
     let bytes = std::fs::read(&output_file).unwrap();
     let doc = hwpers::HwpxReader::from_bytes(&bytes).unwrap();
     let text = doc.extract_text();
@@ -189,7 +187,6 @@ fn test_cli_json_error_format() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // JSON 에러 출력에 "error"와 "code" 필드 확인
     assert!(
         stderr.contains(r#""error""#),
         "JSON error format: {}",
@@ -248,7 +245,7 @@ fn test_cli_validate_progress_logs() {
 fn test_cli_empty_table_conversion_error() {
     let tmp = tempfile::tempdir().unwrap();
     let json_file = tmp.path().join("empty_table.json");
-    std::fs::write(&json_file, r#"{"responseCode":"0","data":{"article":{"atclId":"ERR001","subject":"S","contents":[{"type":"table","value":"<table></table>"}]}}}"#).unwrap();
+    std::fs::write(&json_file, r#"{"article_id":"ERR001","title":"S","contents":[{"type":"table","value":"<table></table>"}]}"#).unwrap();
 
     let output = Command::new(cargo_bin()).arg(&json_file).output().unwrap();
 

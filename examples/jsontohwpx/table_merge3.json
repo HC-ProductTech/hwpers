@@ -1,19 +1,16 @@
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "data": {
-    "article": {
-      "atclId": "BA000000000000000000103",
-      "subject": "[테스트] colspan+rowspan 큰 블록 머지",
-      "contents": [
-        {
-          "type": "table",
-          "value": "<table><tr><td colspan=\"2\" rowspan=\"2\">로고 영역</td><td>날짜</td><td>2025-07-01</td></tr><tr><td>담당자</td><td>홍길동</td></tr><tr><td>항목1</td><td>값1</td><td>항목2</td><td>값2</td></tr><tr><td colspan=\"4\">비고: 특이사항 없음</td></tr></table>"
-        }
-      ],
-      "regDt": "2025-07-01 AM 11:00:00",
-      "regEmpName": "홍길동",
-      "regDeptName": "총무팀"
+  "schema_version": "1.0",
+  "article_id": "BA000000000000000000103",
+  "title": "[테스트] colspan+rowspan 큰 블록 머지",
+  "metadata": {
+    "author": "홍길동",
+    "department": "총무팀",
+    "created_at": "2025-07-01 AM 11:00:00"
+  },
+  "contents": [
+    {
+      "type": "table",
+      "value": "<table><tr><td colspan=\"2\" rowspan=\"2\">로고 영역</td><td>날짜</td><td>2025-07-01</td></tr><tr><td>담당자</td><td>홍길동</td></tr><tr><td>항목1</td><td>값1</td><td>항목2</td><td>값2</td></tr><tr><td colspan=\"4\">비고: 특이사항 없음</td></tr></table>"
     }
-  }
+  ]
 }

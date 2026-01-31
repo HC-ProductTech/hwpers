@@ -27,7 +27,7 @@ cargo fmt
 cargo fmt --check
 
 # jsontohwpx CLI 실행
-cargo run --bin jsontohwpx -- input.json              # 출력: {atclId}.hwpx
+cargo run --bin jsontohwpx -- input.json              # 출력: {article_id}.hwpx
 cargo run --bin jsontohwpx -- input.json -o out.hwpx  # 출력 지정
 cargo run --bin jsontohwpx -- --validate input.json   # 검증만
 cargo run --bin jsontohwpx -- input.json --json       # JSON 에러 출력
@@ -51,7 +51,7 @@ hwpers/                          # clone 기반
 │   │   └── jsontohwpx.rs       # [추가] CLI 진입점
 │   └── jsontohwpx/             # [추가] 변환 모듈
 │       ├── mod.rs
-│       ├── model.rs            # JSON 입력 모델 (article, contents, options)
+│       ├── model.rs            # JSON 입력 모델 (ArticleDocument, Metadata, ConvertOptions)
 │       ├── converter.rs        # 메인 변환 로직
 │       ├── text.rs             # 텍스트 → add_paragraph
 │       ├── image.rs            # 이미지 로드/포맷변환 → add_image
@@ -75,37 +75,35 @@ hwpers/                          # clone 기반
 
 ```json
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "options": {
-    "includeHeader": true,
-    "headerFields": ["subject", "regEmpName", "regDeptName", "regDt"]
+  "schema_version": "1.0",
+  "article_id": "고유ID",
+  "title": "문서 제목",
+  "metadata": {
+    "author": "작성자",
+    "department": "부서",
+    "created_at": "2025-01-30T10:00:00+09:00",
+    "board_name": "게시판명",
+    "expiry": "보존기간"
   },
-  "data": {
-    "article": {
-      "atclId": "고유ID",
-      "subject": "문서 제목",
-      "contents": [
-        { "type": "text", "value": "텍스트" },
-        { "type": "image", "url": "./path.png" },
-        { "type": "image", "base64": "...", "format": "png" },
-        { "type": "table", "value": "<table>...</table>" }
-      ],
-      "regDt": "작성일시",
-      "regEmpName": "작성자",
-      "regDeptName": "부서"
-    }
-  }
+  "contents": [
+    { "type": "text", "value": "텍스트" },
+    { "type": "image", "url": "./path.png" },
+    { "type": "image", "base64": "...", "format": "png" },
+    { "type": "table", "value": "<table>...</table>" }
+  ],
+  "content_html": "<html>...</html>",
+  "attachments": []
 }
 ```
 
-- `responseCode` "0" 필수, 아니면 에러 처리
-- `contents` 배열 순서대로 문서에 삽입 (atclCn 등 다른 본문 필드 무시)
-- `options.includeHeader`: true면 메타데이터를 본문 상단에 텍스트로 삽입
+- `article_id` 필수, 비어있으면 에러 처리
+- `contents` 배열 순서대로 문서에 삽입
+- `content_html`, `attachments` 필드는 파싱되지만 HWPX 변환에 미사용
+- `--include-header` CLI 옵션: true면 메타데이터를 본문 상단에 텍스트로 삽입
 - `type: "text"`: `\n` = 새 단락, `\n\n` = 빈 단락 포함, 연속 text 요소 사이 빈 단락
 - `type: "table"`: HTML `<table>` 구조만 파싱 (인라인 스타일 무시)
 - `type: "image"`: 경로는 JSON 파일 기준, 외부 URL 다운로드 지원
-- 출력 파일명: `{atclId}.hwpx` 자동 생성 (-o로 오버라이드)
+- 출력 파일명: `{article_id}.hwpx` 자동 생성 (-o로 오버라이드)
 
 ## 이미지 포맷 지원
 
