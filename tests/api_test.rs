@@ -343,7 +343,7 @@ async fn test_openapi_json() {
 
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["info"]["title"], "jsontohwpx API");
+    assert_eq!(json["info"]["title"], "HWPX-Converter API");
     assert!(json["paths"]["/api/v1/convert"].is_object());
     assert!(json["paths"]["/api/v1/validate"].is_object());
     assert!(json["paths"]["/api/v1/health"].is_object());
@@ -400,6 +400,84 @@ async fn test_convert_with_include_header() {
 
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     assert_eq!(&body[0..2], &[0x50, 0x4B]);
+}
+
+// --- include_header query parameter 테스트 ---
+
+#[tokio::test]
+async fn test_convert_with_include_header_query() {
+    let app = create_router(&test_config());
+
+    let json = r#"{
+        "article_id": "HDR_Q001",
+        "title": "헤더 쿼리파라미터",
+        "metadata": {
+            "author": "홍길동",
+            "department": "개발팀",
+            "created_at": "2025-01-24 AM 10:00:00"
+        },
+        "contents": [
+            { "type": "text", "value": "본문" }
+        ]
+    }"#;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert?include_header=true")
+        .header("content-type", "application/json")
+        .body(Body::from(json))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let disposition = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(disposition.contains("HDR_Q001.hwpx"));
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(&body[0..2], &[0x50, 0x4B]);
+}
+
+#[tokio::test]
+async fn test_convert_async_with_include_header_query() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = create_router(&test_config_with_output(tmp.path().to_path_buf()));
+
+    let json = r#"{
+        "article_id": "HDR_ASYNC001",
+        "title": "비동기 헤더",
+        "metadata": {
+            "author": "홍길동",
+            "department": "개발팀",
+            "created_at": "2025-01-24 AM 10:00:00"
+        },
+        "contents": [
+            { "type": "text", "value": "본문" }
+        ]
+    }"#;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/async?include_header=true")
+        .header("content-type", "application/json")
+        .body(Body::from(json))
+        .unwrap();
+
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::ACCEPTED);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "queued");
+
+    let job_id = json["jobId"].as_str().unwrap();
+    let result = poll_job_completed(&app, job_id).await;
+    assert_eq!(result["status"], "completed");
 }
 
 // --- 비동기 변환 API 테스트 ---

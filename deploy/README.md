@@ -88,6 +88,7 @@ curl http://localhost:9040/api/v1/health
 JSON을 보내면 즉시 HWPX 파일을 응답으로 받습니다.
 
 ```bash
+# 기본 변환
 curl -X POST http://localhost:9040/api/v1/convert \
   -H "Content-Type: application/json" \
   -d '{
@@ -106,7 +107,16 @@ curl -X POST http://localhost:9040/api/v1/convert \
   }' \
   --output DOC001.hwpx
 
-echo "생성됨: DOC001.hwpx"
+# include_header 옵션: 메타데이터를 본문 상단에 삽입
+curl -X POST "http://localhost:9040/api/v1/convert?include_header=true" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "article_id": "DOC001",
+    "title": "테스트 문서",
+    "metadata": { "author": "홍길동", "department": "개발팀" },
+    "contents": [{ "type": "text", "value": "본문" }]
+  }' \
+  --output DOC001.hwpx
 ```
 
 ---
@@ -140,6 +150,7 @@ curl -X POST http://localhost:9040/api/v1/convert/file \
 ### 5-1. 변환 요청
 
 ```bash
+# 기본 비동기 변환
 curl -X POST http://localhost:9040/api/v1/convert/async \
   -H "Content-Type: application/json" \
   -d '{
@@ -148,6 +159,16 @@ curl -X POST http://localhost:9040/api/v1/convert/async \
     "contents": [
       { "type": "text", "value": "내용..." }
     ]
+  }'
+
+# include_header 옵션 포함
+curl -X POST "http://localhost:9040/api/v1/convert/async?include_header=true" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "article_id": "DOC002",
+    "title": "대용량 문서",
+    "metadata": { "author": "홍길동" },
+    "contents": [{ "type": "text", "value": "내용..." }]
   }'
 ```
 

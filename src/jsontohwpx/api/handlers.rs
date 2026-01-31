@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::{Multipart, Path, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
@@ -126,6 +126,9 @@ pub struct WorkerInfo {
 #[utoipa::path(
     post,
     path = "/api/v1/convert",
+    params(
+        ("include_header" = Option<String>, Query, description = "메타데이터를 본문 상단에 삽입할지 여부 (true/false)")
+    ),
     request_body(content = ConvertRequest, content_type = "application/json"),
     responses(
         (status = 200, description = "변환 성공 (HWPX 바이너리)", content_type = "application/vnd.hancom.hwpx"),
@@ -136,6 +139,7 @@ pub struct WorkerInfo {
 )]
 pub async fn convert(
     State(state): State<Arc<AppState>>,
+    Query(query): Query<ConvertQuery>,
     body: String,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let input: ArticleDocument = serde_json::from_str(&body).map_err(|e| {
@@ -162,7 +166,11 @@ pub async fn convert(
 
     let article_id = input.article_id.trim().to_string();
     let base_path = state.base_path.clone();
-    let options = ConvertOptions::default();
+    let include_header = parse_include_header(query.include_header.as_deref());
+    let options = ConvertOptions {
+        include_header,
+        ..ConvertOptions::default()
+    };
 
     // spawn_blocking으로 감싸서 blocking reqwest와 tokio 런타임 충돌 방지
     let convert_result =
@@ -207,6 +215,18 @@ pub async fn convert(
     ];
 
     Ok((headers, bytes))
+}
+
+/// 변환 엔드포인트 공통 query parameter
+#[derive(Debug, Deserialize)]
+pub struct ConvertQuery {
+    #[serde(default)]
+    pub include_header: Option<String>,
+}
+
+/// include_header 값을 bool로 파싱
+fn parse_include_header(value: Option<&str>) -> bool {
+    value.is_some_and(|v| v == "true" || v == "1")
 }
 
 /// include_header 필드의 커스텀 스키마 (true/false enum, default=false)
@@ -376,6 +396,9 @@ pub async fn convert_file(
 #[utoipa::path(
     post,
     path = "/api/v1/convert/async",
+    params(
+        ("include_header" = Option<String>, Query, description = "메타데이터를 본문 상단에 삽입할지 여부 (true/false)")
+    ),
     request_body(content = ConvertRequest, content_type = "application/json"),
     responses(
         (status = 202, description = "작업 등록 완료", body = AsyncConvertResponse),
@@ -386,6 +409,7 @@ pub async fn convert_file(
 )]
 pub async fn convert_async(
     State(state): State<Arc<AppState>>,
+    Query(query): Query<ConvertQuery>,
     body: String,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     let input: ArticleDocument = serde_json::from_str(&body).map_err(|e| {
@@ -413,10 +437,14 @@ pub async fn convert_async(
     let job_id = Uuid::new_v4().to_string();
     let job = state.job_store.create_job(job_id.clone()).await;
 
+    let include_header = parse_include_header(query.include_header.as_deref());
     let convert_job = ConvertJob {
         job_id: job_id.clone(),
         input,
-        options: ConvertOptions::default(),
+        options: ConvertOptions {
+            include_header,
+            ..ConvertOptions::default()
+        },
         base_path: state.base_path.clone(),
         output_dir: state.output_dir.clone(),
     };
