@@ -2,6 +2,7 @@ services:
   hwpx-converter:
     container_name: hwpx-converter
     image: hwpx-converter:latest
+    platform: linux/amd64
     ports:
       - "9040:9040"
     environment:

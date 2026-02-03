@@ -1,12 +1,25 @@
 {
-  "schema_version": "1.0",
-  "article_id": "BA000000000000000000003",
+  "schema_version": "1.1",
+  "article_id": "BA000000000000000000008",
   "title": "[공지] 이미지 URL 테스트",
   "metadata": {
     "author": "테스터",
+    "created_at": "2026-01-25T12:52:00+09:00",
+    "updated_at": "2026-01-25T12:52:00+09:00",
     "department": "QA팀",
-    "created_at": "2026-01-25 PM 12:52:00"
+    "board_id": "BBNC100171030",
+    "board_name": "공지사항",
+    "board_path": ["BGF리테일게시판", "전사공지사항", "공지사항"],
+    "board_depth": 3,
+    "folder_id": "BFCC100171030",
+    "expiry": "영구",
+    "views": 5,
+    "likes": 0,
+    "comments": 0
   },
+  "attachments": [],
+  "attachment_count": 0,
+  "total_attachment_size": 0,
   "contents": [
     {
       "type": "text",
@@ -20,5 +33,6 @@
       "type": "text",
       "value": "이미지가 정상적으로 삽입되었습니다.\n감사합니다."
     }
-  ]
+  ],
+  "content_html": "<p>안녕하세요.</p>"
 }

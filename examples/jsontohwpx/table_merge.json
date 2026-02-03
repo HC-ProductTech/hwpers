@@ -1,12 +1,25 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "article_id": "BA000000000000000000005",
   "title": "[보고] 셀 병합 테이블 테스트",
   "metadata": {
     "author": "이민수",
+    "created_at": "2025-06-30T16:00:00+09:00",
+    "updated_at": "2025-06-30T16:00:00+09:00",
     "department": "재무팀",
-    "created_at": "2025-06-30 PM 04:00:00"
+    "board_id": "BBNC100171030",
+    "board_name": "공지사항",
+    "board_path": ["BGF리테일게시판", "전사공지사항", "공지사항"],
+    "board_depth": 3,
+    "folder_id": "BFCC100171030",
+    "expiry": "영구",
+    "views": 18,
+    "likes": 0,
+    "comments": 0
   },
+  "attachments": [],
+  "attachment_count": 0,
+  "total_attachment_size": 0,
   "contents": [
     {
       "type": "text",
@@ -16,5 +29,6 @@
       "type": "table",
       "value": "<table><thead><tr><th colspan=\"3\">2025년 상반기 실적</th></tr><tr><th>구분</th><th>항목</th><th>금액</th></tr></thead><tbody><tr><td rowspan=\"2\">수입</td><td>매출</td><td>5,000만</td></tr><tr><td>기타수입</td><td>200만</td></tr><tr><td rowspan=\"2\">지출</td><td>인건비</td><td>2,500만</td></tr><tr><td>운영비</td><td>1,000만</td></tr><tr><td colspan=\"2\">합계 (순이익)</td><td>1,700만</td></tr></tbody></table>"
     }
-  ]
+  ],
+  "content_html": "<p>셀 병합이 포함된 테이블입니다.</p>"
 }

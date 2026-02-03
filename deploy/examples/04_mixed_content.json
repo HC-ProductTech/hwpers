@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.1",
+  "article_id": "IT-2025-015",
+  "title": "사내 시스템 점검 안내 (5/24~5/25)",
+  "metadata": {
+    "author": "최시스템",
+    "created_at": "2025-05-20T11:00:00+09:00",
+    "updated_at": "2025-05-20T11:00:00+09:00",
+    "department": "IT인프라팀",
+    "board_id": "BBNC100171030",
+    "board_name": "전사공지사항",
+    "board_path": ["BGF리테일게시판", "전사공지사항"],
+    "board_depth": 2,
+    "folder_id": "BFCC100171030",
+    "expiry": "1년",
+    "views": 2341,
+    "likes": 5,
+    "comments": 28
+  },
+  "attachments": [
+    {
+      "file_id": "ATT20250520001",
+      "file_name": "시스템점검_상세일정.xlsx",
+      "file_extension": "xlsx",
+      "file_size": 524288,
+      "file_size_formatted": "512.00 KB",
+      "file_url": "https://intranet.bgfretail.com/files/ATT20250520001.xlsx"
+    },
+    {
+      "file_id": "ATT20250520002",
+      "file_name": "비상연락처.pdf",
+      "file_extension": "pdf",
+      "file_size": 102400,
+      "file_size_formatted": "100.00 KB",
+      "file_url": "https://intranet.bgfretail.com/files/ATT20250520002.pdf"
+    }
+  ],
+  "attachment_count": 2,
+  "total_attachment_size": 626688,
+  "contents": [
+    {
+      "type": "text",
+      "value": "안녕하세요, IT인프라팀입니다.\n\n사내 시스템 정기 점검 일정을 안내드립니다.\n업무에 참고하시어 불편 없으시기 바랍니다."
+    },
+    {
+      "type": "table",
+      "value": "<table><tr><th colspan=\"2\">시스템 점검 일정</th></tr><tr><th>항목</th><th>내용</th></tr><tr><td>점검 일시</td><td>2025년 5월 24일(토) 22:00 ~ 5월 25일(일) 06:00</td></tr><tr><td>점검 대상</td><td>그룹웨어, 인트라넷, 메일 시스템</td></tr><tr><td>영향 범위</td><td>점검 시간 중 해당 시스템 접속 불가</td></tr><tr><td>비상 연락</td><td>IT인프라팀 당직 (010-1234-5678)</td></tr></table>"
+    },
+    {
+      "type": "text",
+      "value": "주의사항:\n- 점검 전 중요 문서는 반드시 로컬에 저장해 주세요.\n- 점검 시간 중 메일 발송/수신이 불가합니다.\n- 점검 완료 후 정상화 안내를 별도 공지하겠습니다.\n\n감사합니다."
+    }
+  ],
+  "content_html": ""
+}

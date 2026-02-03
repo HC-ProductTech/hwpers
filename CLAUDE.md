@@ -75,24 +75,43 @@ hwpers/                          # clone 기반
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "article_id": "고유ID",
   "title": "문서 제목",
   "metadata": {
     "author": "작성자",
-    "department": "부서",
     "created_at": "2025-01-30T10:00:00+09:00",
+    "updated_at": "2025-01-30T10:00:00+09:00",
+    "department": "부서",
+    "board_id": "게시판ID",
     "board_name": "게시판명",
-    "expiry": "보존기간"
+    "board_path": ["상위게시판", "하위게시판", "게시판명"],
+    "board_depth": 3,
+    "folder_id": "폴더ID",
+    "expiry": "보존기간",
+    "views": 0,
+    "likes": 0,
+    "comments": 0
   },
+  "attachments": [
+    {
+      "file_id": "파일ID",
+      "file_name": "파일명.pdf",
+      "file_extension": "pdf",
+      "file_size": 1024000,
+      "file_size_formatted": "1000.00 KB",
+      "file_url": "https://example.com/file.pdf"
+    }
+  ],
+  "attachment_count": 1,
+  "total_attachment_size": 1024000,
   "contents": [
     { "type": "text", "value": "텍스트" },
     { "type": "image", "url": "./path.png" },
     { "type": "image", "base64": "...", "format": "png" },
     { "type": "table", "value": "<table>...</table>" }
   ],
-  "content_html": "<html>...</html>",
-  "attachments": []
+  "content_html": "<html>...</html>"
 }
 ```
 

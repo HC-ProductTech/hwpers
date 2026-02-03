@@ -1,6 +1,6 @@
 # 게시판 게시글 JSON 구조화 스펙
 
-> **Version**: 1.0  
+> **Version**: 1.1
 > **Date**: 2026-01-31  
 > **Purpose**: 그룹웨어 게시판 API 응답을 LLM/RAG 처리에 최적화된 JSON 구조로 변환하기 위한 스펙
 
@@ -16,7 +16,7 @@
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "article_id": "string",
   "title": "string",
   "metadata": { ... },
@@ -36,7 +36,7 @@
 
 | 필드 | 타입 | 필수 | 설명 |
 |------|------|------|------|
-| `schema_version` | string | O | 스키마 버전. 하위 호환성 관리용. 현재 `"1.0"` |
+| `schema_version` | string | O | 스키마 버전. 하위 호환성 관리용. 현재 `"1.1"` |
 | `article_id` | string | O | 게시글 고유 ID. 원본 API의 `articleId` 매핑 |
 | `title` | string | O | 게시글 제목 |
 | `metadata` | object | O | 작성자, 날짜, 부서 등 메타 정보 |
@@ -56,6 +56,8 @@
 | `department` | string | O | 작성 부서명. 원본 `regDeptName` 매핑 |
 | `board_id` | string | O | 게시판 ID. 원본 `board.brdId` 매핑 |
 | `board_name` | string | O | 게시판 이름. 원본 `board.brdName` 매핑 |
+| `board_path` | array | O | 게시판 경로 (상위→하위 순서). 예: `["BGF리테일게시판", "전사공지사항", "공지사항"]` |
+| `board_depth` | number | O | 게시판 깊이. `board_path` 배열 길이와 동일 |
 | `folder_id` | string | O | 게시판 폴더 ID. 원본 `board.fldId` 매핑 |
 | `expiry` | string | O | 게시 만료일. `"99991231"` → `"영구"` 변환 |
 | `views` | number | O | 조회수 |
@@ -216,7 +218,7 @@
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "article_id": "BA38881508324312267670",
   "title": "2025년 인사평가 가이드 및 매뉴얼 공지드립니다. (10/27~)",
   "metadata": {
@@ -226,6 +228,8 @@
     "department": "피플앤컬처팀",
     "board_id": "BB388815082858609858498",
     "board_name": "사내게시판",
+    "board_path": ["BGF리테일게시판", "전사공지사항", "사내게시판"],
+    "board_depth": 3,
     "folder_id": "BF388815082746214361498",
     "expiry": "영구",
     "views": 399,
@@ -301,3 +305,4 @@
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
 | 1.0 | 2026-01-31 | 초기 스펙 확정. 테이블 HTML 클린업 규칙 추가, content_text 제거, 링크 마크다운 통합 |
+| 1.1 | 2026-02-02 | metadata에 board_path, board_depth 필드 추가 |

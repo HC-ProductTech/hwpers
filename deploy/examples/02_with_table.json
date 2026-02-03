@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.1",
+  "article_id": "HR-2025-042",
+  "title": "2025년 상반기 교육 일정표",
+  "metadata": {
+    "author": "박인사",
+    "created_at": "2025-04-01T10:30:00+09:00",
+    "updated_at": "2025-04-02T14:00:00+09:00",
+    "department": "인사팀",
+    "board_id": "BBNC100171031",
+    "board_name": "사내교육",
+    "board_path": ["BGF리테일게시판", "인사/총무", "사내교육"],
+    "board_depth": 3,
+    "folder_id": "BFCC100171031",
+    "expiry": "1년",
+    "views": 892,
+    "likes": 23,
+    "comments": 5
+  },
+  "attachments": [
+    {
+      "file_id": "ATT20250401001",
+      "file_name": "2025_교육일정_상세.pdf",
+      "file_extension": "pdf",
+      "file_size": 2048000,
+      "file_size_formatted": "2.00 MB",
+      "file_url": "https://intranet.bgfretail.com/files/ATT20250401001.pdf"
+    }
+  ],
+  "attachment_count": 1,
+  "total_attachment_size": 2048000,
+  "contents": [
+    {
+      "type": "text",
+      "value": "2025년 상반기 사내 교육 일정을 안내합니다.\n아래 일정표를 확인하시고, 해당 교육에 신청해 주세요."
+    },
+    {
+      "type": "table",
+      "value": "<table><tr><th>교육명</th><th>일시</th><th>장소</th><th>대상</th><th>정원</th></tr><tr><td>디지털 전환 기초</td><td>5/12(월) 09:00~17:00</td><td>본사 대회의실</td><td>전 직원</td><td>50명</td></tr><tr><td>리더십 과정</td><td>5/19(월)~5/20(화)</td><td>외부 연수원</td><td>팀장급 이상</td><td>30명</td></tr><tr><td>데이터 분석 실무</td><td>6/2(월)~6/4(수)</td><td>IT교육장</td><td>실무자</td><td>25명</td></tr><tr><td>신입사원 OJT</td><td>6/16(월)~6/20(금)</td><td>본사 교육장</td><td>2025년 신입</td><td>40명</td></tr></table>"
+    },
+    {
+      "type": "text",
+      "value": "교육 신청은 사내 포털 > 교육신청 메뉴에서 가능합니다.\n문의: 인사팀 교육담당 (내선 1234)"
+    }
+  ],
+  "content_html": ""
+}

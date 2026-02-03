@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.1",
+  "article_id": "TEST-001",
+  "title": "최소 필수 필드 예시",
+  "contents": [
+    { "type": "text", "value": "article_id와 contents만 있으면 변환이 가능합니다." }
+  ]
+}
