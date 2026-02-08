@@ -1,19 +1,30 @@
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "data": {
-    "article": {
-      "atclId": "BA000000000000000000103",
-      "subject": "[테스트] colspan+rowspan 큰 블록 머지",
-      "contents": [
-        {
-          "type": "table",
-          "value": "<table><tr><td colspan=\"2\" rowspan=\"2\">로고 영역</td><td>날짜</td><td>2025-07-01</td></tr><tr><td>담당자</td><td>홍길동</td></tr><tr><td>항목1</td><td>값1</td><td>항목2</td><td>값2</td></tr><tr><td colspan=\"4\">비고: 특이사항 없음</td></tr></table>"
-        }
-      ],
-      "regDt": "2025-07-01 AM 11:00:00",
-      "regEmpName": "홍길동",
-      "regDeptName": "총무팀"
+  "schema_version": "1.1",
+  "article_id": "BA000000000000000000103",
+  "title": "[테스트] colspan+rowspan 큰 블록 머지",
+  "metadata": {
+    "author": "홍길동",
+    "created_at": "2025-07-01T11:00:00+09:00",
+    "updated_at": "2025-07-01T11:00:00+09:00",
+    "department": "총무팀",
+    "board_id": "BBNC100171030",
+    "board_name": "테스트게시판",
+    "board_path": ["BGF리테일게시판", "테스트게시판"],
+    "board_depth": 2,
+    "folder_id": "BFCC100171030",
+    "expiry": "영구",
+    "views": 2,
+    "likes": 0,
+    "comments": 0
+  },
+  "attachments": [],
+  "attachment_count": 0,
+  "total_attachment_size": 0,
+  "contents": [
+    {
+      "type": "table",
+      "value": "<table><tr><td colspan=\"2\" rowspan=\"2\">로고 영역</td><td>날짜</td><td>2025-07-01</td></tr><tr><td>담당자</td><td>홍길동</td></tr><tr><td>항목1</td><td>값1</td><td>항목2</td><td>값2</td></tr><tr><td colspan=\"4\">비고: 특이사항 없음</td></tr></table>"
     }
-  }
+  ],
+  "content_html": ""
 }

@@ -1,19 +1,30 @@
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "data": {
-    "article": {
-      "atclId": "BA000000000000000000105",
-      "subject": "[테스트] 불규칙 머지 패턴",
-      "contents": [
-        {
-          "type": "table",
-          "value": "<table><tr><td colspan=\"3\">헤더A</td><td colspan=\"2\">헤더B</td></tr><tr><td rowspan=\"3\">좌측</td><td>A1</td><td>A2</td><td rowspan=\"2\" colspan=\"2\">큰영역</td></tr><tr><td colspan=\"2\">중간병합</td></tr><tr><td>B1</td><td>B2</td><td>B3</td><td>B4</td></tr><tr><td colspan=\"5\">하단 전체 병합</td></tr></table>"
-        }
-      ],
-      "regDt": "2025-07-01 PM 03:00:00",
-      "regEmpName": "정분석",
-      "regDeptName": "QA팀"
+  "schema_version": "1.1",
+  "article_id": "BA000000000000000000105",
+  "title": "[테스트] 불규칙 머지 패턴",
+  "metadata": {
+    "author": "정분석",
+    "created_at": "2025-07-01T15:00:00+09:00",
+    "updated_at": "2025-07-01T15:00:00+09:00",
+    "department": "QA팀",
+    "board_id": "BBNC100171030",
+    "board_name": "테스트게시판",
+    "board_path": ["BGF리테일게시판", "테스트게시판"],
+    "board_depth": 2,
+    "folder_id": "BFCC100171030",
+    "expiry": "영구",
+    "views": 2,
+    "likes": 0,
+    "comments": 0
+  },
+  "attachments": [],
+  "attachment_count": 0,
+  "total_attachment_size": 0,
+  "contents": [
+    {
+      "type": "table",
+      "value": "<table><tr><td colspan=\"3\">헤더A</td><td colspan=\"2\">헤더B</td></tr><tr><td rowspan=\"3\">좌측</td><td>A1</td><td>A2</td><td rowspan=\"2\" colspan=\"2\">큰영역</td></tr><tr><td colspan=\"2\">중간병합</td></tr><tr><td>B1</td><td>B2</td><td>B3</td><td>B4</td></tr><tr><td colspan=\"5\">하단 전체 병합</td></tr></table>"
     }
-  }
+  ],
+  "content_html": ""
 }

@@ -1,23 +1,34 @@
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "data": {
-    "article": {
-      "atclId": "IMG_TEST_WEBP_001",
-      "subject": "[테스트] WebP 이미지 삽입",
-      "contents": [
-        {
-          "type": "text",
-          "value": "WebP 이미지 삽입 테스트입니다."
-        },
-        {
-          "type": "image",
-          "url": "./test_img.webp"
-        }
-      ],
-      "regDt": "2025-01-24 AM 10:05:00",
-      "regEmpName": "테스터",
-      "regDeptName": "QA팀"
+  "schema_version": "1.1",
+  "article_id": "IMG_TEST_WEBP_001",
+  "title": "[테스트] WebP 이미지 삽입",
+  "metadata": {
+    "author": "테스터",
+    "created_at": "2025-01-24T10:05:00+09:00",
+    "updated_at": "2025-01-24T10:05:00+09:00",
+    "department": "QA팀",
+    "board_id": "BBNC100171030",
+    "board_name": "테스트게시판",
+    "board_path": ["BGF리테일게시판", "테스트게시판"],
+    "board_depth": 2,
+    "folder_id": "BFCC100171030",
+    "expiry": "영구",
+    "views": 1,
+    "likes": 0,
+    "comments": 0
+  },
+  "attachments": [],
+  "attachment_count": 0,
+  "total_attachment_size": 0,
+  "contents": [
+    {
+      "type": "text",
+      "value": "WebP 이미지 삽입 테스트입니다."
+    },
+    {
+      "type": "image",
+      "url": "./test_img.webp"
     }
-  }
+  ],
+  "content_html": ""
 }

@@ -2,10 +2,10 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-IMAGE_NAME="hwp-converter"
+IMAGE_NAME="hwpx-converter"
 IMAGE_FILE="${SCRIPT_DIR}/${IMAGE_NAME}.tar.gz"
 
-echo "=== HWP Converter 배포 ==="
+echo "=== HWPX Converter 배포 ==="
 
 # 이미지 로드
 if [ -f "${IMAGE_FILE}" ]; then

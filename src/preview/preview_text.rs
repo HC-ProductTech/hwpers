@@ -1,3 +1,4 @@
+#![allow(clippy::manual_is_multiple_of)]
 use crate::error::{HwpError, Result};
 
 #[derive(Debug, Clone)]

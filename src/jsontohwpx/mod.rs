@@ -8,4 +8,4 @@ pub mod text;
 
 pub use converter::{convert, convert_to_file};
 pub use error::{JsonToHwpxError, Result};
-pub use model::ApiResponse;
+pub use model::{ArticleDocument, ConvertOptions, Metadata};

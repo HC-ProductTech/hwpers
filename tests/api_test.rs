@@ -4,7 +4,7 @@ use axum::Router;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use hwpers::jsontohwpx::api::{create_router, ServerConfig};
+use hwpers::jsontohwpx::api::{build_state, create_router, create_router_with_state, ServerConfig};
 
 fn test_config() -> ServerConfig {
     ServerConfig {
@@ -49,16 +49,11 @@ async fn poll_job_completed(app: &Router, job_id: &str) -> serde_json::Value {
 
 fn simple_json() -> &'static str {
     r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "TEST001",
-                "subject": "테스트",
-                "contents": [
-                    { "type": "text", "value": "안녕하세요" }
-                ]
-            }
-        }
+        "article_id": "TEST001",
+        "title": "테스트",
+        "contents": [
+            { "type": "text", "value": "안녕하세요" }
+        ]
     }"#
 }
 
@@ -79,7 +74,12 @@ async fn test_convert_success() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     // Content-Type 확인
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert_eq!(content_type, "application/vnd.hancom.hwpx");
 
     // Content-Disposition 확인
@@ -117,19 +117,13 @@ async fn test_convert_invalid_json() {
 }
 
 #[tokio::test]
-async fn test_convert_invalid_response_code() {
+async fn test_convert_empty_article_id() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "99",
-        "responseText": "FAIL",
-        "data": {
-            "article": {
-                "atclId": "ERR001",
-                "subject": "에러",
-                "contents": []
-            }
-        }
+        "article_id": "  ",
+        "title": "에러",
+        "contents": []
     }"#;
 
     let req = Request::builder()
@@ -152,16 +146,11 @@ async fn test_convert_empty_table_error() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "TBL_ERR",
-                "subject": "빈테이블",
-                "contents": [
-                    { "type": "table", "value": "<table></table>" }
-                ]
-            }
-        }
+        "article_id": "TBL_ERR",
+        "title": "빈테이블",
+        "contents": [
+            { "type": "table", "value": "<table></table>" }
+        ]
     }"#;
 
     let req = Request::builder()
@@ -184,18 +173,13 @@ async fn test_convert_with_table() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "TBL001",
-                "subject": "테이블문서",
-                "contents": [
-                    { "type": "text", "value": "표 앞" },
-                    { "type": "table", "value": "<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>" },
-                    { "type": "text", "value": "표 뒤" }
-                ]
-            }
-        }
+        "article_id": "TBL001",
+        "title": "테이블문서",
+        "contents": [
+            { "type": "text", "value": "표 앞" },
+            { "type": "table", "value": "<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>" },
+            { "type": "text", "value": "표 뒤" }
+        ]
     }"#;
 
     let req = Request::builder()
@@ -257,18 +241,13 @@ async fn test_validate_invalid_json() {
 }
 
 #[tokio::test]
-async fn test_validate_bad_response_code() {
+async fn test_validate_empty_article_id() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "1",
-        "data": {
-            "article": {
-                "atclId": "X",
-                "subject": "",
-                "contents": []
-            }
-        }
+        "article_id": "  ",
+        "title": "",
+        "contents": []
     }"#;
 
     let req = Request::builder()
@@ -364,7 +343,7 @@ async fn test_openapi_json() {
 
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["info"]["title"], "jsontohwpx API");
+    assert_eq!(json["info"]["title"], "HWPX-Converter API");
     assert!(json["paths"]["/api/v1/convert"].is_object());
     assert!(json["paths"]["/api/v1/validate"].is_object());
     assert!(json["paths"]["/api/v1/health"].is_object());
@@ -383,7 +362,8 @@ async fn test_swagger_ui_redirect() {
     let resp = app.oneshot(req).await.unwrap();
     // Swagger UI는 /swagger-ui/ 로 리다이렉트하거나 200 반환
     assert!(
-        resp.status() == StatusCode::OK || resp.status() == StatusCode::MOVED_PERMANENTLY
+        resp.status() == StatusCode::OK
+            || resp.status() == StatusCode::MOVED_PERMANENTLY
             || resp.status() == StatusCode::TEMPORARY_REDIRECT
             || resp.status() == StatusCode::SEE_OTHER,
     );
@@ -396,20 +376,16 @@ async fn test_convert_with_include_header() {
     let app = create_router(&test_config());
 
     let json = r#"{
-        "responseCode": "0",
-        "options": { "includeHeader": true },
-        "data": {
-            "article": {
-                "atclId": "HDR001",
-                "subject": "헤더포함",
-                "contents": [
-                    { "type": "text", "value": "본문" }
-                ],
-                "regDt": "2025-01-24 AM 10:00:00",
-                "regEmpName": "홍길동",
-                "regDeptName": "개발팀"
-            }
-        }
+        "article_id": "HDR001",
+        "title": "헤더포함",
+        "metadata": {
+            "author": "홍길동",
+            "department": "개발팀",
+            "created_at": "2025-01-24 AM 10:00:00"
+        },
+        "contents": [
+            { "type": "text", "value": "본문" }
+        ]
     }"#;
 
     let req = Request::builder()
@@ -424,6 +400,84 @@ async fn test_convert_with_include_header() {
 
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     assert_eq!(&body[0..2], &[0x50, 0x4B]);
+}
+
+// --- include_header query parameter 테스트 ---
+
+#[tokio::test]
+async fn test_convert_with_include_header_query() {
+    let app = create_router(&test_config());
+
+    let json = r#"{
+        "article_id": "HDR_Q001",
+        "title": "헤더 쿼리파라미터",
+        "metadata": {
+            "author": "홍길동",
+            "department": "개발팀",
+            "created_at": "2025-01-24 AM 10:00:00"
+        },
+        "contents": [
+            { "type": "text", "value": "본문" }
+        ]
+    }"#;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert?include_header=true")
+        .header("content-type", "application/json")
+        .body(Body::from(json))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let disposition = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(disposition.contains("HDR_Q001.hwpx"));
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(&body[0..2], &[0x50, 0x4B]);
+}
+
+#[tokio::test]
+async fn test_convert_async_with_include_header_query() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = create_router(&test_config_with_output(tmp.path().to_path_buf()));
+
+    let json = r#"{
+        "article_id": "HDR_ASYNC001",
+        "title": "비동기 헤더",
+        "metadata": {
+            "author": "홍길동",
+            "department": "개발팀",
+            "created_at": "2025-01-24 AM 10:00:00"
+        },
+        "contents": [
+            { "type": "text", "value": "본문" }
+        ]
+    }"#;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/async?include_header=true")
+        .header("content-type", "application/json")
+        .body(Body::from(json))
+        .unwrap();
+
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::ACCEPTED);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "queued");
+
+    let job_id = json["jobId"].as_str().unwrap();
+    let result = poll_job_completed(&app, job_id).await;
+    assert_eq!(result["status"], "completed");
 }
 
 // --- 비동기 변환 API 테스트 ---
@@ -477,18 +531,13 @@ async fn test_convert_async_invalid_json() {
 }
 
 #[tokio::test]
-async fn test_convert_async_invalid_response_code() {
+async fn test_convert_async_empty_article_id() {
     let app = create_router(&test_config());
 
     let json_body = r#"{
-        "responseCode": "99",
-        "data": {
-            "article": {
-                "atclId": "ERR001",
-                "subject": "에러",
-                "contents": []
-            }
-        }
+        "article_id": "  ",
+        "title": "에러",
+        "contents": []
     }"#;
 
     let req = Request::builder()
@@ -567,7 +616,12 @@ async fn test_convert_async_download() {
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert_eq!(content_type, "application/vnd.hancom.hwpx");
 
     let disposition = resp
@@ -590,16 +644,11 @@ async fn test_convert_async_failed_job() {
 
     // 빈 테이블로 변환 실패 유도
     let json_body = r#"{
-        "responseCode": "0",
-        "data": {
-            "article": {
-                "atclId": "FAIL001",
-                "subject": "실패테스트",
-                "contents": [
-                    { "type": "table", "value": "<table></table>" }
-                ]
-            }
-        }
+        "article_id": "FAIL001",
+        "title": "실패테스트",
+        "contents": [
+            { "type": "table", "value": "<table></table>" }
+        ]
     }"#;
 
     let req = Request::builder()
@@ -664,4 +713,344 @@ async fn test_openapi_includes_async_paths() {
     assert!(json["paths"]["/api/v1/convert/async"].is_object());
     assert!(json["paths"]["/api/v1/jobs/{id}"].is_object());
     assert!(json["paths"]["/api/v1/jobs/{id}/download"].is_object());
+}
+
+// --- 라이선스 만료 테스트 ---
+
+fn test_config_with_license(expiry: Option<chrono::NaiveDate>) -> ServerConfig {
+    ServerConfig {
+        host: "127.0.0.1".to_string(),
+        port: 0,
+        max_request_size: 50 * 1024 * 1024,
+        base_path: std::path::PathBuf::from("examples/jsontohwpx"),
+        license_expiry: expiry,
+        ..Default::default()
+    }
+}
+
+fn create_router_with_license(expiry: Option<chrono::NaiveDate>) -> Router {
+    let config = test_config_with_license(expiry);
+    let state = build_state(&config);
+    create_router_with_state(state, config.max_request_size)
+}
+
+/// 라이선스 미설정 시 health는 license 필드 없이 healthy
+#[tokio::test]
+async fn test_health_no_license() {
+    let app = create_router_with_license(None);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "healthy");
+    assert!(
+        json["license"].is_null(),
+        "license 미설정 시 필드 없어야 함"
+    );
+}
+
+/// 유효한 라이선스 → health: healthy + license: valid
+#[tokio::test]
+async fn test_health_valid_license() {
+    let future_date = chrono::NaiveDate::from_ymd_opt(2099, 12, 31).unwrap();
+    let app = create_router_with_license(Some(future_date));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "healthy");
+    assert_eq!(json["license"], "valid");
+}
+
+/// 만료된 라이선스 → health: expired + license: expired (200 응답)
+#[tokio::test]
+async fn test_health_expired_license() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    // health는 만료 후에도 200으로 응답 (미들웨어 예외)
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "expired");
+    assert_eq!(json["license"], "expired");
+}
+
+/// 만료된 라이선스 → convert 요청은 503
+#[tokio::test]
+async fn test_convert_blocked_when_expired() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert")
+        .header("content-type", "application/json")
+        .body(Body::from(simple_json()))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+/// 만료된 라이선스 → validate 요청은 503
+#[tokio::test]
+async fn test_validate_blocked_when_expired() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/validate")
+        .header("content-type", "application/json")
+        .body(Body::from(simple_json()))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+/// 만료된 라이선스 → swagger-ui는 정상 접근
+#[tokio::test]
+async fn test_swagger_accessible_when_expired() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/swagger-ui")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    // swagger-ui는 만료와 무관하게 접근 가능 (200 또는 리다이렉트)
+    assert_ne!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+/// 만료된 라이선스 → api-docs는 정상 접근
+#[tokio::test]
+async fn test_api_docs_accessible_when_expired() {
+    let past_date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let app = create_router_with_license(Some(past_date));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api-docs/openapi.json")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+// --- convert/file (파일 업로드) 테스트 ---
+
+fn multipart_body(boundary: &str, fields: &[(&str, Option<&str>, &[u8])]) -> Vec<u8> {
+    let mut body = Vec::new();
+    for (name, filename, data) in fields {
+        body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+        if let Some(fname) = filename {
+            body.extend_from_slice(
+                format!(
+                    "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
+                    name, fname
+                )
+                .as_bytes(),
+            );
+            body.extend_from_slice(b"Content-Type: application/json\r\n");
+        } else {
+            body.extend_from_slice(
+                format!("Content-Disposition: form-data; name=\"{}\"\r\n", name).as_bytes(),
+            );
+        }
+        body.extend_from_slice(b"\r\n");
+        body.extend_from_slice(data);
+        body.extend_from_slice(b"\r\n");
+    }
+    body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+    body
+}
+
+#[tokio::test]
+async fn test_convert_file_success() {
+    let app = create_router(&test_config());
+    let boundary = "----TestBoundary12345";
+    let json_bytes = simple_json().as_bytes();
+
+    let body = multipart_body(boundary, &[("file", Some("input.json"), json_bytes)]);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/file")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(content_type, "application/vnd.hancom.hwpx");
+
+    let disposition = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(disposition.contains("TEST001.hwpx"));
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    assert!(!body.is_empty());
+    assert_eq!(&body[0..2], &[0x50, 0x4B], "유효한 ZIP 파일이어야 함");
+}
+
+#[tokio::test]
+async fn test_convert_file_no_file_field() {
+    let app = create_router(&test_config());
+    let boundary = "----TestBoundary12345";
+
+    let body = multipart_body(boundary, &[("other", None, b"something")]);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/file")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["code"], "MISSING_FILE");
+}
+
+#[tokio::test]
+async fn test_convert_file_invalid_json() {
+    let app = create_router(&test_config());
+    let boundary = "----TestBoundary12345";
+
+    let body = multipart_body(boundary, &[("file", Some("bad.json"), b"this is not json")]);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/file")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["code"], "INVALID_JSON");
+}
+
+#[tokio::test]
+async fn test_convert_file_with_include_header() {
+    let app = create_router(&test_config());
+    let boundary = "----TestBoundary12345";
+
+    let json_str = r#"{
+        "article_id": "HDR_FILE001",
+        "title": "헤더포함 파일업로드",
+        "metadata": {
+            "author": "홍길동",
+            "department": "개발팀",
+            "created_at": "2025-01-24 AM 10:00:00"
+        },
+        "contents": [
+            { "type": "text", "value": "본문" }
+        ]
+    }"#;
+
+    let body = multipart_body(
+        boundary,
+        &[
+            ("file", Some("input.json"), json_str.as_bytes()),
+            ("include_header", None, b"true"),
+        ],
+    );
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert/file")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let disposition = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(disposition.contains("HDR_FILE001.hwpx"));
+
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(&body[0..2], &[0x50, 0x4B]);
+}
+
+/// 유효한 라이선스 → convert 정상 동작
+#[tokio::test]
+async fn test_convert_allowed_when_valid() {
+    let future_date = chrono::NaiveDate::from_ymd_opt(2099, 12, 31).unwrap();
+    let app = create_router_with_license(Some(future_date));
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/convert")
+        .header("content-type", "application/json")
+        .body(Body::from(simple_json()))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
 }

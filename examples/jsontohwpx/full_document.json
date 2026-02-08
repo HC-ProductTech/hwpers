@@ -1,39 +1,59 @@
 {
-  "responseCode": "0",
-  "responseText": "SUCCESS",
-  "data": {
-    "article": {
-      "atclId": "BA000000000000000000006",
-      "subject": "[종합] 프로젝트 진행 보고서",
-      "contents": [
-        {
-          "type": "text",
-          "value": "안녕하세요. 개발팀 홍길동입니다.\n\n프로젝트 진행 상황을 보고합니다."
-        },
-        {
-          "type": "text",
-          "value": "1. 진행 현황\n\n현재 개발 진행률은 85%이며, 예정대로 진행 중입니다."
-        },
-        {
-          "type": "table",
-          "value": "<table><thead><tr><th>단계</th><th>상태</th><th>완료율</th></tr></thead><tbody><tr><td>설계</td><td>완료</td><td>100%</td></tr><tr><td>개발</td><td>진행중</td><td>85%</td></tr><tr><td>테스트</td><td>대기</td><td>0%</td></tr></tbody></table>"
-        },
-        {
-          "type": "text",
-          "value": "2. 주요 이슈\n\n현재 발견된 이슈는 아래와 같습니다."
-        },
-        {
-          "type": "image",
-          "url": "./test_img.png"
-        },
-        {
-          "type": "text",
-          "value": "3. 향후 계획\n\n다음 주까지 개발을 완료하고 테스트에 돌입할 예정입니다.\n\n감사합니다."
-        }
-      ],
-      "regDt": "2025-01-24 AM 09:00:00",
-      "regEmpName": "홍길동",
-      "regDeptName": "개발팀"
+  "schema_version": "1.1",
+  "article_id": "BA000000000000000000006",
+  "title": "[종합] 프로젝트 진행 보고서",
+  "metadata": {
+    "author": "홍길동",
+    "created_at": "2025-01-24T09:00:00+09:00",
+    "updated_at": "2025-01-24T11:30:00+09:00",
+    "department": "개발팀",
+    "board_id": "BBNC100171030",
+    "board_name": "공지사항",
+    "board_path": ["BGF리테일게시판", "전사공지사항", "공지사항"],
+    "board_depth": 3,
+    "folder_id": "BFCC100171030",
+    "expiry": "영구",
+    "views": 120,
+    "likes": 5,
+    "comments": 3
+  },
+  "attachments": [
+    {
+      "file_id": "BD000000000000000000001",
+      "file_name": "프로젝트_진행현황.pdf",
+      "file_extension": "pdf",
+      "file_size": 1548720,
+      "file_size_formatted": "1.48 MB",
+      "file_url": "https://gw.hancom.com/ekp/service/file/fileView?module=board&fileUrl=/C100171030/board/file/2025/01/24&fileName=project-report.pdf"
     }
-  }
+  ],
+  "attachment_count": 1,
+  "total_attachment_size": 1548720,
+  "contents": [
+    {
+      "type": "text",
+      "value": "안녕하세요. 개발팀 홍길동입니다.\n\n프로젝트 진행 상황을 보고합니다."
+    },
+    {
+      "type": "text",
+      "value": "1. 진행 현황\n\n현재 개발 진행률은 85%이며, 예정대로 진행 중입니다."
+    },
+    {
+      "type": "table",
+      "value": "<table><thead><tr><th>단계</th><th>상태</th><th>완료율</th></tr></thead><tbody><tr><td>설계</td><td>완료</td><td>100%</td></tr><tr><td>개발</td><td>진행중</td><td>85%</td></tr><tr><td>테스트</td><td>대기</td><td>0%</td></tr></tbody></table>"
+    },
+    {
+      "type": "text",
+      "value": "2. 주요 이슈\n\n현재 발견된 이슈는 아래와 같습니다."
+    },
+    {
+      "type": "image",
+      "url": "./test_img.png"
+    },
+    {
+      "type": "text",
+      "value": "3. 향후 계획\n\n다음 주까지 개발을 완료하고 테스트에 돌입할 예정입니다.\n\n감사합니다."
+    }
+  ],
+  "content_html": "<p>안녕하세요. 개발팀 홍길동입니다.</p>"
 }

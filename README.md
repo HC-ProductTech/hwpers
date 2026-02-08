@@ -282,21 +282,33 @@ jsontohwpx input.json --json -o output.hwpx
 
 ```json
 {
-  "responseCode": "0",
-  "data": {
-    "article": {
-      "atclId": "DOC001",
-      "subject": "문서 제목",
-      "contents": [
-        { "type": "text", "value": "본문 텍스트" },
-        { "type": "table", "value": "<table><tr><td>셀</td></tr></table>" },
-        { "type": "image", "url": "image.png" }
-      ],
-      "regDt": "2025-01-24 AM 10:00:00",
-      "regEmpName": "작성자",
-      "regDeptName": "부서명"
-    }
-  }
+  "schema_version": "1.1",
+  "article_id": "DOC001",
+  "title": "문서 제목",
+  "metadata": {
+    "author": "작성자",
+    "created_at": "2025-01-30T10:00:00+09:00",
+    "updated_at": "2025-01-30T10:00:00+09:00",
+    "department": "부서명",
+    "board_id": "BBNC100171030",
+    "board_name": "공지사항",
+    "board_path": ["BGF리테일게시판", "전사공지사항", "공지사항"],
+    "board_depth": 3,
+    "folder_id": "BFCC100171030",
+    "expiry": "영구",
+    "views": 0,
+    "likes": 0,
+    "comments": 0
+  },
+  "attachments": [],
+  "attachment_count": 0,
+  "total_attachment_size": 0,
+  "contents": [
+    { "type": "text", "value": "본문 텍스트" },
+    { "type": "table", "value": "<table><tr><td>셀</td></tr></table>" },
+    { "type": "image", "url": "image.png" }
+  ],
+  "content_html": "<p>본문 텍스트</p>"
 }
 ```
 
@@ -451,8 +463,7 @@ curl http://localhost:8080/api/v1/health
 | 에러 코드 | HTTP 상태 | 설명 |
 |-----------|-----------|------|
 | `INVALID_JSON` | 400 | JSON 파싱 실패 |
-| `INVALID_RESPONSE_CODE` | 400 | responseCode가 "0"이 아님 |
-| `MISSING_DATA` | 400 | data 또는 article 필드 누락 |
+| `INPUT_ERROR` | 400 | 입력 데이터 검증 실패 (article_id 누락 등) |
 | `CONVERSION_ERROR` | 500 | 변환 처리 중 오류 |
 | `QUEUE_ERROR` | 503 | 작업 큐 제출 실패 |
 

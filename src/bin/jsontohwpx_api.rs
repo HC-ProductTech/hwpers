@@ -16,6 +16,20 @@ async fn main() {
     let addr = format!("{}:{}", config.host, config.port);
     let file_expiry_hours = config.file_expiry_hours;
 
+    // 라이선스 만료 체크 (서버 시작 시)
+    if let Some(expiry) = config.license_expiry {
+        let today = chrono::Local::now().date_naive();
+        if today > expiry {
+            tracing::error!(
+                expiry = %expiry,
+                today = %today,
+                "라이선스가 만료되었습니다"
+            );
+            std::process::exit(1);
+        }
+        tracing::info!(expiry = %expiry, "라이선스 유효");
+    }
+
     tracing::info!(
         host = %config.host,
         port = config.port,
@@ -63,9 +77,7 @@ async fn main() {
 /// Graceful shutdown 시그널 대기
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("Ctrl+C 핸들러 설치 실패");
+        signal::ctrl_c().await.expect("Ctrl+C 핸들러 설치 실패");
     };
 
     #[cfg(unix)]

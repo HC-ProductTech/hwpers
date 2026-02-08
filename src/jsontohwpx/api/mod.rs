@@ -6,16 +6,21 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use axum::extract::DefaultBodyLimit;
+use axum::body::{Body, to_bytes};
+use axum::extract::{DefaultBodyLimit, State};
+use axum::http::{Request, StatusCode};
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
 use axum::Router;
+use chrono::NaiveDate;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa_swagger_ui::{Config, SwaggerUi};
 
 use handlers::{
-    ConvertRequest, ErrorDetail, ErrorItem, ErrorResponse, HealthResponse, ValidateResponse,
-    WorkerInfo,
+    ConvertFileRequest, ConvertRequest, ErrorDetail, ErrorItem, ErrorResponse, HealthResponse,
+    ValidateResponse, WorkerInfo,
 };
 use jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
 
@@ -23,13 +28,13 @@ use jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
 #[derive(OpenApi)]
 #[openapi(
     info(
-        title = "jsontohwpx API",
+        title = "HWPX-Converter API",
         version = "0.5.0",
-        description = "JSON API 응답을 HWPX(한글 문서) 파일로 변환하는 REST API",
-        license(name = "MIT OR Apache-2.0")
+        description = "JSON 데이터를 HWPX(한글 문서) 파일로 변환하는 REST API"
     ),
     paths(
         handlers::convert,
+        handlers::convert_file,
         handlers::convert_async,
         handlers::get_job,
         handlers::download_job,
@@ -38,6 +43,7 @@ use jobs::{AsyncConvertResponse, JobResponse, JobStats, JobStatus};
     ),
     components(schemas(
         ConvertRequest,
+        ConvertFileRequest,
         ErrorResponse,
         ErrorDetail,
         ErrorItem,
@@ -65,6 +71,7 @@ pub struct AppState {
     pub output_dir: PathBuf,
     pub job_store: jobs::JobStore,
     pub queue: queue::JobQueue,
+    pub license_expiry: Option<NaiveDate>,
 }
 
 /// API 서버 설정
@@ -76,6 +83,7 @@ pub struct ServerConfig {
     pub output_dir: PathBuf,
     pub worker_count: u64,
     pub file_expiry_hours: u64,
+    pub license_expiry: Option<NaiveDate>,
 }
 
 impl Default for ServerConfig {
@@ -88,6 +96,7 @@ impl Default for ServerConfig {
             output_dir: PathBuf::from("./output"),
             worker_count: 4,
             file_expiry_hours: 24,
+            license_expiry: None,
         }
     }
 }
@@ -126,6 +135,12 @@ impl ServerConfig {
                 config.file_expiry_hours = h;
             }
         }
+        // 라이선스 만료일: 컴파일 타임에 내장된 값 사용
+        if let Some(expiry_str) = option_env!("LICENSE_EXPIRY_EMBEDDED") {
+            if let Ok(date) = NaiveDate::parse_from_str(expiry_str, "%Y-%m-%d") {
+                config.license_expiry = Some(date);
+            }
+        }
 
         config
     }
@@ -142,6 +157,7 @@ pub fn build_state(config: &ServerConfig) -> Arc<AppState> {
         output_dir: config.output_dir.clone(),
         job_store,
         queue,
+        license_expiry: config.license_expiry,
     })
 }
 
@@ -151,11 +167,95 @@ pub fn create_router(config: &ServerConfig) -> Router {
     create_router_with_state(state, config.max_request_size)
 }
 
+/// 라이선스 만료 체크 미들웨어
+///
+/// 만료일이 설정된 경우, 현재 날짜가 만료일을 초과하면 503을 반환합니다.
+/// health, swagger-ui, api-docs 경로는 예외 처리합니다.
+async fn license_check_middleware(
+    State(state): State<Arc<AppState>>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let path = request.uri().path().to_string();
+
+    // health, swagger-ui, api-docs는 만료와 무관하게 항상 허용
+    let is_exempt = path == "/api/v1/health"
+        || path.starts_with("/swagger-ui")
+        || path.starts_with("/api-docs");
+
+    if !is_exempt {
+        if let Some(expiry) = state.license_expiry {
+            let today = chrono::Local::now().date_naive();
+            if today > expiry {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("라이선스가 만료되었습니다 (만료일: {})", expiry),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    next.run(request).await
+}
+
+/// Swagger UI에 주입할 커스텀 CSS
+///
+/// - `.servers`, `.servers-title`: 글로벌/operation-level Servers 드롭다운 숨김
+/// - `.operation-servers`: operation 서버 옵션 숨김
+/// - `.schemes-server-container`: 스킴/서버 컨테이너 숨김
+const SWAGGER_CUSTOM_CSS: &str = r#"<style>
+.servers,
+.servers-title,
+.operation-servers,
+.schemes-server-container { display: none !important; }
+</style>"#;
+
+/// Swagger UI HTML 응답에 커스텀 CSS를 주입하는 미들웨어
+async fn swagger_css_middleware(request: Request<Body>, next: Next) -> Response {
+    let path = request.uri().path().to_string();
+    let response = next.run(request).await;
+
+    // swagger-ui 루트 경로(index.html)만 대상
+    let is_swagger_html = (path == "/swagger-ui"
+        || path == "/swagger-ui/"
+        || path == "/swagger-ui/index.html")
+        && response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|ct| ct.contains("text/html"));
+
+    if !is_swagger_html {
+        return response;
+    }
+
+    let (parts, body) = response.into_parts();
+    let Ok(bytes) = to_bytes(body, 1024 * 1024).await else {
+        return Response::from_parts(parts, Body::empty());
+    };
+    let html = String::from_utf8_lossy(&bytes);
+    let modified = html.replace("</head>", &format!("{SWAGGER_CUSTOM_CSS}\n</head>"));
+    Response::from_parts(parts, Body::from(modified.to_string()))
+}
+
 /// 주어진 AppState로 Router 생성
 pub fn create_router_with_state(state: Arc<AppState>, max_request_size: usize) -> Router {
+    let mut openapi = ApiDoc::openapi();
+    // utoipa가 Cargo.toml의 license를 자동 삽입하므로 런타임에 제거
+    openapi.info.license = None;
+
     Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .merge(
+            SwaggerUi::new("/swagger-ui")
+                .url("/api-docs/openapi.json", openapi)
+                .config(Config::default().use_base_layout()),
+        )
         .route("/api/v1/convert", axum::routing::post(handlers::convert))
+        .route(
+            "/api/v1/convert/file",
+            axum::routing::post(handlers::convert_file),
+        )
         .route(
             "/api/v1/convert/async",
             axum::routing::post(handlers::convert_async),
@@ -167,6 +267,11 @@ pub fn create_router_with_state(state: Arc<AppState>, max_request_size: usize) -
         )
         .route("/api/v1/validate", axum::routing::post(handlers::validate))
         .route("/api/v1/health", axum::routing::get(handlers::health))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            license_check_middleware,
+        ))
+        .layer(axum::middleware::from_fn(swagger_css_middleware))
         .layer(DefaultBodyLimit::max(max_request_size))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

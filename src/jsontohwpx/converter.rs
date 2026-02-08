@@ -4,43 +4,50 @@ use crate::hwpx::{HwpxMetadata, HwpxTextStyle, HwpxWriter, StyledText};
 
 use super::error::Result;
 use super::image;
-use super::model::{ApiResponse, Content};
+use super::model::{ArticleDocument, Content, ConvertOptions};
 use super::table;
 use super::text;
 
-/// JSON ApiResponse를 HWPX 바이트로 변환
-pub fn convert(input: &ApiResponse, base_path: &Path) -> Result<Vec<u8>> {
+/// ArticleDocument를 HWPX 바이트로 변환
+pub fn convert(
+    input: &ArticleDocument,
+    options: &ConvertOptions,
+    base_path: &Path,
+) -> Result<Vec<u8>> {
     input.validate()?;
 
     let mut writer = HwpxWriter::new();
-    let article = &input.data.article;
 
     // 문서 메타데이터 설정
-    let creator = match (&article.reg_emp_name, &article.reg_dept_name) {
+    let meta = input.metadata.as_ref();
+    let creator = match (
+        meta.and_then(|m| m.author.as_deref()),
+        meta.and_then(|m| m.department.as_deref()),
+    ) {
         (Some(name), Some(dept)) => format!("{} ({})", name, dept),
-        (Some(name), None) => name.clone(),
+        (Some(name), None) => name.to_string(),
         _ => String::new(),
     };
     writer.set_metadata(HwpxMetadata {
-        title: article.subject.clone(),
+        title: input.title.clone().unwrap_or_default(),
         creator,
-        created_date: article.reg_dt.clone().unwrap_or_default(),
+        created_date: meta.and_then(|m| m.created_at.clone()).unwrap_or_default(),
     });
 
     // includeHeader 옵션 처리
-    if input.options.include_header {
-        add_header_section(&mut writer, input)?;
+    if options.include_header {
+        add_header_section(&mut writer, input, options)?;
     }
 
     // 빈 contents 경고
-    if article.contents.is_empty() {
+    if input.contents.is_empty() {
         eprintln!("[경고] contents가 비어있습니다. 빈 문서를 생성합니다.");
     }
 
     // contents 순회하며 변환
     let mut has_prev = false;
 
-    for content in &article.contents {
+    for content in &input.contents {
         // 각 콘텐츠 항목 사이에 빈 단락(개행) 추가
         if has_prev {
             text::add_separator_paragraph(&mut writer)?;
@@ -72,33 +79,57 @@ pub fn convert(input: &ApiResponse, base_path: &Path) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// JSON ApiResponse를 HWPX 파일로 변환하여 저장
-pub fn convert_to_file(input: &ApiResponse, base_path: &Path, output: &Path) -> Result<()> {
-    let bytes = convert(input, base_path)?;
+/// ArticleDocument를 HWPX 파일로 변환하여 저장
+pub fn convert_to_file(
+    input: &ArticleDocument,
+    options: &ConvertOptions,
+    base_path: &Path,
+    output: &Path,
+) -> Result<()> {
+    let bytes = convert(input, options, base_path)?;
     std::fs::write(output, bytes)?;
     Ok(())
 }
 
 /// includeHeader 옵션에 따라 메타데이터를 본문 상단에 삽입
-fn add_header_section(writer: &mut HwpxWriter, input: &ApiResponse) -> Result<()> {
-    let article = &input.data.article;
-    let fields = &input.options.header_fields;
+fn add_header_section(
+    writer: &mut HwpxWriter,
+    input: &ArticleDocument,
+    options: &ConvertOptions,
+) -> Result<()> {
+    let meta = input.metadata.as_ref();
+    let fields = &options.header_fields;
 
     let bold_style = HwpxTextStyle::new().bold();
 
     let field_entries: Vec<(&str, Option<&str>)> = vec![
-        ("subject", Some(article.subject.as_str())),
-        ("regEmpName", article.reg_emp_name.as_deref()),
-        ("regDeptName", article.reg_dept_name.as_deref()),
-        ("regDt", article.reg_dt.as_deref()),
+        ("title", input.title.as_deref()),
+        ("subject", input.title.as_deref()),
+        ("author", meta.and_then(|m| m.author.as_deref())),
+        ("regEmpName", meta.and_then(|m| m.author.as_deref())),
+        ("department", meta.and_then(|m| m.department.as_deref())),
+        ("regDeptName", meta.and_then(|m| m.department.as_deref())),
+        ("created_at", meta.and_then(|m| m.created_at.as_deref())),
+        ("regDt", meta.and_then(|m| m.created_at.as_deref())),
+        ("board_name", meta.and_then(|m| m.board_name.as_deref())),
+        ("expiry", meta.and_then(|m| m.expiry.as_deref())),
     ];
 
     let labels = [
+        ("title", "제목"),
         ("subject", "제목"),
+        ("author", "작성자"),
         ("regEmpName", "작성자"),
+        ("department", "부서"),
         ("regDeptName", "부서"),
+        ("created_at", "작성일"),
         ("regDt", "작성일"),
+        ("board_name", "게시판"),
+        ("expiry", "보존기간"),
     ];
+
+    // 이미 출력한 라벨을 추적하여 중복 출력 방지
+    let mut printed_labels = Vec::new();
 
     for (field_key, value) in &field_entries {
         if !fields.is_empty() && !fields.iter().any(|f| f == *field_key) {
@@ -111,6 +142,12 @@ fn add_header_section(writer: &mut HwpxWriter, input: &ApiResponse) -> Result<()
                 .find(|(k, _)| k == field_key)
                 .map(|(_, l)| *l)
                 .unwrap_or(*field_key);
+
+            // 같은 라벨이 이미 출력되었으면 건너뜀 (title/subject, author/regEmpName 등)
+            if printed_labels.contains(&label) {
+                continue;
+            }
+            printed_labels.push(label);
 
             let runs = vec![
                 StyledText::with_style(&format!("{}: ", label), bold_style.clone()),
@@ -130,31 +167,29 @@ fn add_header_section(writer: &mut HwpxWriter, input: &ApiResponse) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jsontohwpx::model::ApiResponse;
+    use crate::jsontohwpx::model::ArticleDocument;
     use std::path::PathBuf;
 
     fn base_path() -> PathBuf {
         PathBuf::from("examples/jsontohwpx")
     }
 
+    fn default_options() -> ConvertOptions {
+        ConvertOptions::default()
+    }
+
     #[test]
     fn test_convert_simple_text() {
         let json = r#"{
-            "responseCode": "0",
-            "responseText": "SUCCESS",
-            "data": {
-                "article": {
-                    "atclId": "TEST001",
-                    "subject": "테스트 문서",
-                    "contents": [
-                        { "type": "text", "value": "안녕하세요" }
-                    ]
-                }
-            }
+            "article_id": "TEST001",
+            "title": "테스트 문서",
+            "contents": [
+                { "type": "text", "value": "안녕하세요" }
+            ]
         }"#;
 
-        let input: ApiResponse = serde_json::from_str(json).unwrap();
-        let result = convert(&input, &base_path());
+        let input: ArticleDocument = serde_json::from_str(json).unwrap();
+        let result = convert(&input, &default_options(), &base_path());
         assert!(result.is_ok());
         assert!(!result.unwrap().is_empty());
     }
@@ -162,36 +197,25 @@ mod tests {
     #[test]
     fn test_convert_empty_contents() {
         let json = r#"{
-            "responseCode": "0",
-            "data": {
-                "article": {
-                    "atclId": "TEST002",
-                    "subject": "빈 문서",
-                    "contents": []
-                }
-            }
+            "article_id": "TEST002",
+            "title": "빈 문서",
+            "contents": []
         }"#;
 
-        let input: ApiResponse = serde_json::from_str(json).unwrap();
-        let result = convert(&input, &base_path());
+        let input: ArticleDocument = serde_json::from_str(json).unwrap();
+        let result = convert(&input, &default_options(), &base_path());
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_convert_invalid_response_code() {
+    fn test_convert_empty_article_id_fails() {
         let json = r#"{
-            "responseCode": "999",
-            "responseText": "ERROR",
-            "data": {
-                "article": {
-                    "atclId": "TEST003",
-                    "subject": "에러"
-                }
-            }
+            "article_id": "  ",
+            "title": "에러"
         }"#;
 
-        let input: ApiResponse = serde_json::from_str(json).unwrap();
-        let result = convert(&input, &base_path());
+        let input: ArticleDocument = serde_json::from_str(json).unwrap();
+        let result = convert(&input, &default_options(), &base_path());
         assert!(result.is_err());
     }
 }
